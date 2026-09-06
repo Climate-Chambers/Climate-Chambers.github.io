@@ -1,0 +1,3479 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>מערכת בקרת תא אקלים - Climate Chamber Control System</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Heebo -->
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- Three.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls for Three.js -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Heebo', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            blue: '#0284c7',
+                            darkblue: '#092540',
+                            teal: '#0d9488',
+                            orange: '#ea580c',
+                            slate: '#0f172a'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            font-family: 'Heebo', sans-serif;
+            background-color: #f1f5f9;
+            color: #0f172a;
+            overflow-x: hidden;
+        }
+
+        /* Custom scrollbar for control panel */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #e2e8f0;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #94a3b8;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #0284c7;
+        }
+
+        /* ==================================================================
+           Design system — restrained, institutional.
+           One accent colour, flat surfaces, hairline borders, tabular
+           numerals everywhere a value can change, so figures do not jitter.
+           ================================================================== */
+        :root {
+            --accent:        #0b5f9e;   /* deep institutional blue */
+            --accent-hover:  #094e83;
+            --accent-soft:   #eff6fc;
+            --line:          #e4e8ee;
+            --line-soft:     #f1f4f8;
+            --ink:           #14243a;
+            --ink-muted:     #64748b;
+            --surface:       #ffffff;
+            --radius:        10px;
+        }
+
+        .panel {
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            padding: 18px;
+        }
+
+        .panel-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            padding-bottom: 12px;
+            margin-bottom: 14px;
+            border-bottom: 1px solid var(--line-soft);
+        }
+        .panel-head h2 {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--ink);
+            letter-spacing: -0.01em;
+        }
+        .panel-head h2 i { color: var(--accent); font-size: 13px; }
+        .panel-head p { font-size: 11px; color: var(--ink-muted); font-weight: 400; }
+
+        .field-label {
+            display: block;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--ink-muted);
+            margin-bottom: 6px;
+        }
+
+        /* ---- Segmented control ------------------------------------------- */
+        .segmented {
+            display: inline-flex;
+            background: var(--line-soft);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 2px;
+            gap: 2px;
+        }
+        .segmented button {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 5px 11px;
+            border-radius: 6px;
+            color: var(--ink-muted);
+            transition: background .15s, color .15s;
+        }
+        .segmented button:hover { color: var(--ink); }
+        .segmented button[aria-pressed="true"] {
+            background: var(--surface);
+            color: var(--accent);
+            box-shadow: 0 1px 2px rgba(20, 36, 58, .08);
+        }
+
+        /* ---- Numeric stepper --------------------------------------------- */
+        .stepper {
+            display: flex;
+            align-items: stretch;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            overflow: hidden;
+            background: var(--surface);
+        }
+        .stepper button {
+            width: 38px;
+            flex: 0 0 38px;
+            font-size: 17px;
+            font-weight: 700;
+            line-height: 1;
+            color: var(--ink-muted);
+            background: var(--line-soft);
+            transition: background .15s, color .15s;
+        }
+        .stepper button:hover { background: #e8edf3; color: var(--ink); }
+        .stepper button.accent { background: var(--accent); color: #fff; }
+        .stepper button.accent:hover { background: var(--accent-hover); }
+        .stepper input {
+            flex: 1 1 auto;
+            min-width: 0;
+            border: 0;
+            outline: none;
+            text-align: center;
+            /* Large enough that the value reads at a glance — the previous
+               field was too narrow for its own contents. */
+            font-size: 26px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            color: var(--ink);
+            padding: 4px 2px;
+        }
+        .stepper input::-webkit-outer-spin-button,
+        .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .stepper input[type=number] { -moz-appearance: textfield; }
+        .stepper #target-unit {
+            display: flex;
+            align-items: center;
+            padding: 0 8px;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--accent);
+            background: var(--surface);
+            white-space: nowrap;
+        }
+
+        .pill {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 600;
+            padding: 1px 7px;
+            border-radius: 9999px;
+            border: 1px solid transparent;
+            white-space: nowrap;
+        }
+        .pill-neutral { background: #f1f4f8; color: #64748b; border-color: #e4e8ee; }
+        .pill-ok      { background: #ecfdf3; color: #047857; border-color: #bbf7d0; }
+        .pill-warm    { background: #fff5ed; color: #c2410c; border-color: #fed7aa; }
+        .pill-cool    { background: #eff6fc; color: #0b5f9e; border-color: #cfe2f2; }
+
+        .offset-preset {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 9px;
+            border-radius: 6px;
+            border: 1px solid var(--line);
+            background: var(--surface);
+            color: var(--ink-muted);
+            font-variant-numeric: tabular-nums;
+            transition: background .15s, color .15s, border-color .15s;
+        }
+        .offset-preset:hover { background: var(--accent-soft); color: var(--accent); border-color: #cfe2f2; }
+
+        /* ---- 3D view chrome ---------------------------------------------- */
+        .view-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 5px 10px;
+            border-radius: 6px;
+            border: 1px solid var(--line);
+            background: var(--surface);
+            color: var(--ink-muted);
+            transition: background .15s, color .15s, border-color .15s;
+        }
+        .view-btn:hover { background: var(--accent-soft); color: var(--accent); border-color: #cfe2f2; }
+        .view-btn i { font-size: 11px; }
+        .view-btn.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+
+        /* Loading overlay: flat, on-surface, no dark blur or floating card. */
+        .loader3d {
+            position: absolute;
+            inset: 0;
+            z-index: 30;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f6f8fb;
+            transition: opacity .35s ease;
+        }
+        .loader3d-inner {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            padding: 0 24px;
+        }
+        .loader3d-spinner {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            border: 2px solid var(--line);
+            border-top-color: var(--accent);
+            animation: loader3d-spin .7s linear infinite;
+        }
+        @keyframes loader3d-spin { to { transform: rotate(360deg); } }
+        .loader3d-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--ink);
+        }
+        .loader3d-step {
+            font-size: 11px;
+            color: var(--ink-muted);
+            min-height: 15px;
+            text-align: center;
+        }
+        .loader3d-track {
+            width: 168px;
+            height: 3px;
+            border-radius: 9999px;
+            background: var(--line);
+            overflow: hidden;
+        }
+        .loader3d-bar {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 9999px;
+            transition: width .35s ease;
+        }
+
+        /* ---- Header status chips ----------------------------------------- */
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 11px;
+            color: var(--ink-muted);
+            background: var(--line-soft);
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            padding: 5px 9px;
+            white-space: nowrap;
+        }
+        .chip strong { font-weight: 600; }
+        .chip .dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 7px; }
+
+        .hdr-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 5px 10px;
+            border-radius: 6px;
+            border: 1px solid var(--line);
+            background: var(--surface);
+            color: var(--ink-muted);
+            transition: background .15s, color .15s, border-color .15s;
+        }
+        .hdr-btn:hover { background: var(--accent-soft); color: var(--accent); border-color: #cfe2f2; }
+
+        /* ---- Chamber switcher tabs --------------------------------------- */
+        .tab {
+            flex: 0 0 auto;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 4px 11px;
+            border-radius: 6px;
+            border: 1px solid transparent;
+            color: var(--ink-muted);
+            transition: background .15s, color .15s;
+        }
+        .tab:hover { background: var(--line-soft); color: var(--ink); }
+        .tab[aria-current="page"] {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+
+        /* ---- Data-source banner ------------------------------------------ */
+        .banner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            padding: 8px 24px;
+            font-size: 11px;
+            border-bottom: 1px solid var(--line);
+        }
+        .banner-live  { background: #f2fbf6; color: #14532d; border-bottom-color: #c9ecd8; }
+        .banner-sim   { background: #fffaf0; color: #713f12; border-bottom-color: #fbe6bd; }
+        .banner-error { background: #fef4f4; color: #7f1d1d; border-bottom-color: #f6d4d4; }
+        .banner-btn {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 10px;
+            border-radius: 6px;
+            border: 1px solid currentColor;
+            background: rgba(255, 255, 255, .7);
+            flex: 0 0 auto;
+            transition: background .15s;
+        }
+        .banner-btn:hover { background: #fff; }
+
+        /* ---- Summary strip tiles ----------------------------------------- */
+        .stat {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 9px 8px;
+            text-align: center;
+            background: var(--surface);
+        }
+        .stat-label {
+            display: block;
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--ink-muted);
+            margin-bottom: 1px;
+        }
+        .stat-value {
+            display: block;
+            font-size: 17px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            color: var(--ink);
+            line-height: 1.2;
+        }
+        .stat-sub {
+            display: block;
+            font-size: 10px;
+            color: var(--ink-muted);
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* ---- Internal sensor rows ---------------------------------------- */
+        .sensor-head {
+            display: grid;
+            grid-template-columns: 1.5fr 1fr 1fr;
+            gap: 8px;
+            padding: 0 10px 4px;
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--ink-muted);
+        }
+        .sensor-row {
+            display: grid;
+            grid-template-columns: 1.5fr 1fr 1fr;
+            gap: 8px;
+            align-items: center;
+            padding: 6px 10px;
+            border-bottom: 1px solid var(--line-soft);
+        }
+        .sensor-row:last-child { border-bottom: 0; }
+        .sensor-row .name {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--ink);
+        }
+        .sensor-row .name .dot { width: 6px; height: 6px; border-radius: 50%; background: #0f9d76; flex: 0 0 6px; }
+        .sensor-row .name .dot.off { background: #dc2626; }
+        /* Readings, not controls: no caret, no spinners, no focus ring. */
+        .sensor-row input {
+            width: 100%;
+            text-align: center;
+            font-size: 13px;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+            color: var(--ink);
+            border: 0;
+            border-radius: 5px;
+            padding: 3px 2px;
+            background: var(--line-soft);
+            cursor: default;
+            pointer-events: none;
+        }
+        .sensor-row input::-webkit-outer-spin-button,
+        .sensor-row input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .sensor-row input[type=number] { -moz-appearance: textfield; }
+
+        /* ---- Operating mode selector ------------------------------------- */
+        .mode-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            padding: 9px 4px;
+            border-radius: 8px;
+            border: 1px solid var(--line);
+            background: var(--surface);
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--ink-muted);
+            transition: background .15s, color .15s, border-color .15s;
+        }
+        .mode-btn i { font-size: 13px; }
+        .mode-btn:hover { background: var(--line-soft); color: var(--ink); }
+        .mode-btn.on      { background: var(--accent);  border-color: var(--accent);  color: #fff; }
+        .mode-btn.on-heat { background: #c2410c;        border-color: #c2410c;        color: #fff; }
+        .mode-btn.on-off  { background: #334155;        border-color: #334155;        color: #fff; }
+        .mode-btn.pending {
+            background: #fffaf0;
+            border-color: #e9b949;
+            border-style: dashed;
+            color: #92400e;
+        }
+
+
+        /* Pulse glow animations for bright theme */
+        @keyframes glow-orange-light {
+            0%, 100% { box-shadow: 0 0 12px rgba(234, 88, 12, 0.25); }
+            50% { box-shadow: 0 0 24px rgba(234, 88, 12, 0.5); }
+        }
+        .glow-heating {
+            animation: glow-orange-light 2s infinite;
+        }
+
+        @keyframes glow-blue-light {
+            0%, 100% { box-shadow: 0 0 12px rgba(2, 132, 199, 0.25); }
+            50% { box-shadow: 0 0 24px rgba(2, 132, 199, 0.5); }
+        }
+        .glow-ventilation {
+            animation: glow-blue-light 2s infinite;
+        }
+
+        /* Floating tooltip for interactive 3D components */
+        #tooltip3d {
+            position: absolute;
+            display: none;
+            z-index: 30;
+            pointer-events: none;
+            background: rgba(15, 23, 42, 0.92);
+            color: #f8fafc;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 5px 10px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+            white-space: nowrap;
+            transform: translate(-50%, -135%);
+        }
+
+        /* Offset slider (relative target mode) */
+        input[type="range"].offset-range {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 6px;
+            border-radius: 9999px;
+            background: #e2e8f0;
+            outline: none;
+        }
+        input[type="range"].offset-range::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #0284c7;
+            border: 3px solid #ffffff;
+            box-shadow: 0 1px 4px rgba(2, 132, 199, 0.5);
+            cursor: pointer;
+        }
+        input[type="range"].offset-range::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #0284c7;
+            border: 3px solid #ffffff;
+            box-shadow: 0 1px 4px rgba(2, 132, 199, 0.5);
+            cursor: pointer;
+        }
+
+        /* ===== Mechanical Iris Diaphragm & Industrial Widget ===== */
+        .iris-mech-widget {
+            position: relative;
+            width: 76px;
+            height: 86px;
+            flex-shrink: 0;
+            cursor: pointer;
+            transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+            user-select: none;
+        }
+        .iris-mech-widget:hover {
+            transform: scale(1.06);
+        }
+        .iris-mech-widget:active {
+            transform: scale(0.96);
+        }
+
+        /* Fan Rotor High-Speed Spin */
+        .iris-fan-rotor {
+            transform-origin: 50px 65px;
+            transition: transform 0.3s linear;
+        }
+        .iris-mech-widget.active .iris-fan-rotor {
+            animation: iris-rotor-spin 0.5s linear infinite;
+        }
+        @keyframes iris-rotor-spin {
+            from { transform: rotate(0deg); }
+            to   { transform: rotate(360deg); }
+        }
+
+        /* Iris 3 Curved Blades Smooth Opening / Closing Transitions */
+        .iris-blade-1, .iris-blade-2, .iris-blade-3 {
+            transition: transform 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .iris-mech-widget.active .iris-blade-1 {
+            transform: rotate(62deg);
+        }
+        .iris-mech-widget.active .iris-blade-2 {
+            transform: rotate(62deg);
+        }
+        .iris-mech-widget.active .iris-blade-3 {
+            transform: rotate(62deg);
+        }
+
+        /* Center Pin & Shaft */
+        .iris-center-pin {
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            transform-origin: 50px 65px;
+        }
+        .iris-mech-widget.active .iris-center-pin {
+            opacity: 0;
+            transform: scale(0);
+        }
+        .iris-shaft {
+            transition: transform 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .iris-mech-widget.active .iris-shaft {
+            transform: translateY(5px);
+        }
+
+        /* Airflow Glow Vortex */
+        .iris-fan-glow-layer {
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+        .iris-mech-widget.active .iris-fan-glow-layer {
+            opacity: 1;
+        }
+
+        /* Flange Ring Active Glow */
+        .iris-flange-ring {
+            transition: filter 0.4s ease, stroke 0.4s ease;
+        }
+        .iris-mech-widget.active .iris-flange-ring {
+            stroke: #0284c7;
+            filter: drop-shadow(0 0 6px rgba(2, 132, 199, 0.45));
+        }
+
+        /* Offline / Communication Fault Badge Animation */
+        @keyframes alert-pulse-glow {
+            0%, 100% { box-shadow: 0 0 8px rgba(239, 68, 68, 0.4); }
+            50% { box-shadow: 0 0 18px rgba(239, 68, 68, 0.8); }
+        }
+        .comms-offline-alert {
+            animation: alert-pulse-glow 1.5s infinite;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-100">
+
+    <!-- Top Navigation / Header -->
+    <header class="bg-white sticky top-0 z-50 px-6 py-3 border-b border-slate-200 flex flex-wrap justify-between items-center gap-4">
+        <div class="flex items-center gap-3">
+            <a href="index.html" title="חזרה לרשימת תאי האקלים"
+               class="w-8 h-8 rounded-md border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 hover:text-slate-800 transition">
+                <i class="fa-solid fa-arrow-right text-sm"></i>
+            </a>
+            <div>
+                <h1 class="text-base font-bold tracking-tight text-slate-900 flex items-center gap-2">
+                    <span id="chamber-title">תא אקלים</span>
+                    <span id="chamber-id-badge" class="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 font-semibold border border-slate-200" dir="ltr"></span>
+                </h1>
+                <p class="text-[11px] text-slate-500 mt-0.5">
+                    <span id="chamber-location">—</span>
+                </p>
+            </div>
+        </div>
+
+        <!-- Quick Status Indicators -->
+        <div class="flex items-center gap-2 flex-wrap">
+            <span class="chip">
+                <span id="header-pi-dot" class="dot" style="background:#94a3b8"></span>
+                בקר Pi: <strong id="header-pi-status">בודק…</strong>
+            </span>
+            <span class="chip">
+                <span id="header-db-dot" class="dot" style="background:#94a3b8"></span>
+                Firestore: <strong id="header-db-status">מתחבר…</strong>
+            </span>
+            <span id="sys-mode-badge" class="pill pill-cool">מצב: אוטומטי</span>
+            <button id="btn-diag-toggle" onclick="toggleDiagnosticsModal()" class="hdr-btn" title="אבחון תקשורת חיישנים">
+                <i class="fa-solid fa-stethoscope"></i> אבחון
+            </button>
+            <button id="btn-signout" class="hdr-btn">
+                <i class="fa-solid fa-arrow-right-from-bracket"></i> התנתק
+            </button>
+        </div>
+    </header>
+
+    <!-- Chamber switcher: jump between chambers without returning to the index -->
+    <nav class="bg-white border-b border-slate-200 px-6 py-1.5 flex items-center gap-2 overflow-x-auto">
+        <span class="text-[10px] font-semibold text-slate-400 shrink-0">תאים</span>
+        <div id="chamber-tabs" class="flex items-center gap-1"></div>
+    </nav>
+
+    <!-- Data-source banner: explains where the numbers on screen come from -->
+    <div id="source-banner" class="banner hidden">
+        <span id="source-banner-text" class="flex items-center gap-2"></span>
+        <button id="btn-toggle-sim" class="banner-btn"></button>
+    </div>
+
+    <!-- Main Content Grid Area -->
+    <main class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 p-4 md:p-6 max-w-[1920px] mx-auto w-full">
+
+        <!-- LEFT COLUMN: Input Fields & Dashboard Controls (5 Cols on LG) -->
+        <section class="lg:col-span-5 flex flex-col gap-5 overflow-y-auto max-h-[calc(100vh-100px)] pl-1">
+
+            <!-- 0. At-a-Glance System Summary Strip -->
+            <div class="panel">
+                <div class="panel-head">
+                    <h2><i class="fa-solid fa-chart-simple"></i> סיכום מצב</h2>
+                    <span id="demand-pill" class="pill pill-neutral">ממתין לחישוב…</span>
+                </div>
+                <div class="grid grid-cols-4 gap-2">
+                    <div class="stat">
+                        <span class="stat-label">חוץ</span>
+                        <span id="sum-outside" class="stat-value">21.0°C</span>
+                        <span id="sum-outside-rh" class="stat-sub">45%</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">פנים</span>
+                        <span id="sum-inside" class="stat-value">28.6°C</span>
+                        <span id="sum-inside-rh" class="stat-sub">50.2%</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">יעד</span>
+                        <span id="sum-target" class="stat-value" style="color:var(--accent)">31.0°C</span>
+                        <span id="sum-offset-label" class="stat-sub">Δ +10.0°C</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">סטייה</span>
+                        <span id="sum-delta" class="stat-value">—</span>
+                        <span id="sum-delta-hint" class="stat-sub">—</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- The external probe used to have a panel of its own here. It
+                 said exactly what the "חוץ" tile above already says, so it is
+                 gone: every reading appears in exactly one place. -->
+
+            <!-- 2. Target Temperature Controller Logic -->
+            <div class="panel">
+                <div class="panel-head">
+                    <h2><i class="fa-solid fa-bullseye"></i> הגדרת יעד טמפרטורה</h2>
+                    <!-- Compact segmented control instead of two large cards -->
+                    <div class="segmented" role="group" aria-label="שיטת הגדרת יעד">
+                        <button type="button" id="target-mode-relative" onclick="setTargetMode('relative')">יחסי לסביבה</button>
+                        <button type="button" id="target-mode-absolute" onclick="setTargetMode('absolute')">ערך מוחלט</button>
+                    </div>
+                </div>
+
+                <!-- Setpoint stepper. The resulting temperature and the
+                     deviation from it are NOT repeated here: they are the
+                     "יעד" and "סטייה" tiles in the summary strip above, which
+                     update as you drag. -->
+                <div>
+                    <label id="target-input-label" for="target-value-input" class="field-label">
+                        הפרש מהסביבה
+                    </label>
+                    <div class="stepper">
+                        <button type="button" id="offset-minus" aria-label="הקטן">−</button>
+                        <input type="number" id="target-value-input" value="10.0" step="0.5" aria-describedby="target-unit">
+                        <span id="target-unit">Δ°C</span>
+                        <button type="button" id="offset-plus" class="accent" aria-label="הגדל">+</button>
+                    </div>
+                </div>
+
+                <!-- Relative-mode extras: slider + presets on one line -->
+                <div id="relative-extras" class="mt-3 pt-3 border-t border-slate-100 flex flex-col gap-2">
+                    <input type="range" id="offset-slider" class="offset-range" min="-10" max="20" step="0.5" value="10" aria-label="כיוון הפרש טמפרטורה">
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <button type="button" class="offset-preset" data-offset="-5">‎−5</button>
+                        <button type="button" class="offset-preset" data-offset="2">+2</button>
+                        <button type="button" class="offset-preset" data-offset="5">+5</button>
+                        <button type="button" class="offset-preset" data-offset="10">+10</button>
+                        <button type="button" class="offset-preset" data-offset="15">+15</button>
+                        <span class="text-[10px] text-slate-400 mr-auto tabular-nums">יעד = סביבה + Δ</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. Internal Chamber 5 Sensors Panel -->
+            <div class="panel">
+                <div class="panel-head">
+                    <h2>
+                        <i class="fa-solid fa-microchip"></i>
+                        <span id="sensors-heading">חיישני פנים התא</span>
+                    </h2>
+                    <button id="btn-randomize" onclick="randomizeInternalSensors()" class="hidden hdr-btn">
+                        <i class="fa-solid fa-dice"></i> פיזור אקראי
+                    </button>
+                </div>
+
+                <!-- Sensor rows are generated from the chamber's sensorCount,
+                     keeping the s{i}-temp / s{i}-rh id scheme intact. -->
+                <div class="sensor-head">
+                    <span>מיקום</span>
+                    <span class="text-center">טמפ׳ °C</span>
+                    <span class="text-center">לחות %</span>
+                </div>
+                <div id="sensor-rows"></div>
+
+                <!-- The internal average lives in the "פנים" tile of the
+                     summary strip; it is not repeated at the foot of this
+                     panel any more. -->
+            </div>
+
+            <!-- 4. System Actuator & Control Modes -->
+            <div class="panel">
+                <div class="panel-head">
+                    <h2><i class="fa-solid fa-sliders"></i> מצב הפעלה</h2>
+                    <span class="text-[11px] text-slate-500">ידני / אוטומטי</span>
+                </div>
+
+                <!-- Mode Selectors Buttons -->
+                <div class="grid grid-cols-4 gap-2 mb-5">
+                    <button onclick="setSystemMode('AUTO')" id="btn-mode-auto" class="mode-btn on">
+                        <i class="fa-solid fa-robot"></i> אוטומטי
+                    </button>
+                    <button onclick="setSystemMode('VENTILATION')" id="btn-mode-vent" class="mode-btn">
+                        <i class="fa-solid fa-fan"></i> אוורור
+                    </button>
+                    <button onclick="setSystemMode('HEATING')" id="btn-mode-heat" class="mode-btn">
+                        <i class="fa-solid fa-fire"></i> חימום
+                    </button>
+                    <button onclick="setSystemMode('OFF')" id="btn-mode-off" class="mode-btn">
+                        <i class="fa-solid fa-power-off"></i> כיבוי
+                    </button>
+                </div>
+
+                <!-- Actuators Status Monitor -->
+                <div class="space-y-3 text-xs">
+                    <!-- Top Fan & Damper Status -->
+                    <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center justify-between shadow-sm">
+                        <div class="flex items-center gap-3">
+                            <!-- Mechanical Iris Diaphragm Widget - Top Fan -->
+                            <div id="iris-top" class="iris-mech-widget group" onclick="toggleFanManual('top')" title="תריס צוּר מכני עליון - לחץ להפעלה ידנית">
+                                <svg viewBox="0 0 100 115" class="w-full h-full drop-shadow">
+                                    <defs>
+                                        <linearGradient id="top-flange-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                            <stop offset="0%" stop-color="#f8fafc"/>
+                                            <stop offset="35%" stop-color="#cbd5e1"/>
+                                            <stop offset="70%" stop-color="#94a3b8"/>
+                                            <stop offset="100%" stop-color="#64748b"/>
+                                        </linearGradient>
+                                        <linearGradient id="top-piston-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                            <stop offset="0%" stop-color="#475569"/>
+                                            <stop offset="50%" stop-color="#f1f5f9"/>
+                                            <stop offset="100%" stop-color="#334155"/>
+                                        </linearGradient>
+                                        <linearGradient id="top-blade1-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                            <stop offset="0%" stop-color="#f1f5f9"/>
+                                            <stop offset="45%" stop-color="#94a3b8"/>
+                                            <stop offset="100%" stop-color="#475569"/>
+                                        </linearGradient>
+                                        <linearGradient id="top-blade2-grad" x1="100%" y1="0%" x2="0%" y2="100%">
+                                            <stop offset="0%" stop-color="#ffffff"/>
+                                            <stop offset="45%" stop-color="#cbd5e1"/>
+                                            <stop offset="100%" stop-color="#334155"/>
+                                        </linearGradient>
+                                        <linearGradient id="top-blade3-grad" x1="50%" y1="100%" x2="50%" y2="0%">
+                                            <stop offset="0%" stop-color="#cbd5e1"/>
+                                            <stop offset="45%" stop-color="#94a3b8"/>
+                                            <stop offset="100%" stop-color="#1e293b"/>
+                                        </linearGradient>
+                                        <radialGradient id="top-tunnel-grad" cx="50%" cy="50%" r="50%">
+                                            <stop offset="0%" stop-color="#0284c7" stop-opacity="0.35"/>
+                                            <stop offset="50%" stop-color="#0f172a"/>
+                                            <stop offset="100%" stop-color="#020617"/>
+                                        </radialGradient>
+                                        <radialGradient id="top-fan-glow" cx="50%" cy="50%" r="50%">
+                                            <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.75"/>
+                                            <stop offset="60%" stop-color="#0284c7" stop-opacity="0.3"/>
+                                            <stop offset="100%" stop-color="#0284c7" stop-opacity="0"/>
+                                        </radialGradient>
+                                        <clipPath id="top-aperture-clip">
+                                            <circle cx="50" cy="65" r="28"/>
+                                        </clipPath>
+                                    </defs>
+
+                                    <!-- Top Actuator Piston -->
+                                    <g class="iris-piston-group">
+                                        <rect x="42" y="2" width="16" height="13" rx="2" fill="url(#top-piston-grad)" stroke="#1e293b" stroke-width="1.6"/>
+                                        <rect x="47" y="15" width="6" height="14" fill="url(#top-piston-grad)" stroke="#1e293b" stroke-width="1.3" class="iris-shaft"/>
+                                    </g>
+
+                                    <!-- Outer Flange Ring -->
+                                    <circle cx="50" cy="65" r="45" fill="url(#top-flange-grad)" stroke="#1e293b" stroke-width="2" class="iris-flange-ring"/>
+                                    <circle cx="50" cy="65" r="43.5" fill="none" stroke="#ffffff" stroke-width="0.8" opacity="0.6"/>
+                                    <circle cx="50" cy="65" r="29" fill="none" stroke="#1e293b" stroke-width="2"/>
+
+                                    <!-- 12 Perimeter Bolts -->
+                                    <g fill="#334155" stroke="#1e293b" stroke-width="1">
+                                        <circle cx="87" cy="65" r="2.8" fill="#cbd5e1"/><circle cx="87" cy="65" r="1.1"/>
+                                        <circle cx="82" cy="83.5" r="2.8" fill="#cbd5e1"/><circle cx="82" cy="83.5" r="1.1"/>
+                                        <circle cx="68.5" cy="97" r="2.8" fill="#cbd5e1"/><circle cx="68.5" cy="97" r="1.1"/>
+                                        <circle cx="50" cy="102" r="2.8" fill="#cbd5e1"/><circle cx="50" cy="102" r="1.1"/>
+                                        <circle cx="31.5" cy="97" r="2.8" fill="#cbd5e1"/><circle cx="31.5" cy="97" r="1.1"/>
+                                        <circle cx="18" cy="83.5" r="2.8" fill="#cbd5e1"/><circle cx="18" cy="83.5" r="1.1"/>
+                                        <circle cx="13" cy="65" r="2.8" fill="#cbd5e1"/><circle cx="13" cy="65" r="1.1"/>
+                                        <circle cx="18" cy="46.5" r="2.8" fill="#cbd5e1"/><circle cx="18" cy="46.5" r="1.1"/>
+                                        <circle cx="31.5" cy="33" r="2.8" fill="#cbd5e1"/><circle cx="31.5" cy="33" r="1.1"/>
+                                        <circle cx="50" cy="28" r="2.8" fill="#cbd5e1"/><circle cx="50" cy="28" r="1.1"/>
+                                        <circle cx="68.5" cy="33" r="2.8" fill="#cbd5e1"/><circle cx="68.5" cy="33" r="1.1"/>
+                                        <circle cx="82" cy="46.5" r="2.8" fill="#cbd5e1"/><circle cx="82" cy="46.5" r="1.1"/>
+                                    </g>
+
+                                    <!-- Aperture Tunnel & Fan Underneath -->
+                                    <g clip-path="url(#top-aperture-clip)">
+                                        <circle cx="50" cy="65" r="28" fill="url(#top-tunnel-grad)"/>
+                                        <circle cx="50" cy="65" r="26" fill="url(#top-fan-glow)" class="iris-fan-glow-layer"/>
+
+                                        <!-- Spinning Fan (5 Blades) -->
+                                        <g class="iris-fan-rotor">
+                                            <path d="M50 65 Q58 48 50 37 Q42 48 50 65" fill="#0284c7" stroke="#0369a1" stroke-width="0.8"/>
+                                            <path d="M50 65 Q69 60 77 54 Q67 69 50 65" fill="#0284c7" stroke="#0369a1" stroke-width="0.8"/>
+                                            <path d="M50 65 Q65 81 67 92 Q53 83 50 65" fill="#0284c7" stroke="#0369a1" stroke-width="0.8"/>
+                                            <path d="M50 65 Q35 81 33 92 Q47 83 50 65" fill="#0284c7" stroke="#0369a1" stroke-width="0.8"/>
+                                            <path d="M50 65 Q31 60 23 54 Q33 69 50 65" fill="#0284c7" stroke="#0369a1" stroke-width="0.8"/>
+                                            <circle cx="50" cy="65" r="7.5" fill="#0f172a" stroke="#38bdf8" stroke-width="1.4"/>
+                                            <circle cx="50" cy="65" r="3" fill="#e0f2fe"/>
+                                        </g>
+
+                                        <!-- 3 Curved Mechanical Iris Blades -->
+                                        <g class="iris-blade-1" style="transform-origin: 74px 44px;">
+                                            <path d="M50 65 C63 51 74 46 78 44 C68 28 48 30 30 40 C37 48 43 57 50 65 Z" 
+                                                  fill="url(#top-blade1-grad)" stroke="#1e293b" stroke-width="1.8" stroke-linejoin="round"/>
+                                            <path d="M50 65 C60 53 70 48 78 44" fill="none" stroke="#0f172a" stroke-width="2"/>
+                                            <circle cx="74" cy="44" r="1.6" fill="#1e293b"/>
+                                        </g>
+                                        <g class="iris-blade-2" style="transform-origin: 68px 89px;">
+                                            <path d="M50 65 C58 78 64 88 68 89 C82 75 79 53 69 36 C61 47 55 56 50 65 Z" 
+                                                  fill="url(#top-blade2-grad)" stroke="#1e293b" stroke-width="1.8" stroke-linejoin="round"/>
+                                            <path d="M50 65 C57 76 63 84 68 89" fill="none" stroke="#0f172a" stroke-width="2"/>
+                                            <circle cx="68" cy="89" r="1.6" fill="#1e293b"/>
+                                        </g>
+                                        <g class="iris-blade-3" style="transform-origin: 24px 65px;">
+                                            <path d="M50 65 C35 68 27 66 24 65 C25 85 46 93 67 89 C59 78 54 69 50 65 Z" 
+                                                  fill="url(#top-blade3-grad)" stroke="#1e293b" stroke-width="1.8" stroke-linejoin="round"/>
+                                            <path d="M50 65 C37 66 29 65 24 65" fill="none" stroke="#0f172a" stroke-width="2"/>
+                                            <circle cx="24" cy="65" r="1.6" fill="#1e293b"/>
+                                        </g>
+                                        <circle cx="50" cy="65" r="2.2" fill="#ffffff" stroke="#1e293b" stroke-width="1.2" class="iris-center-pin"/>
+                                    </g>
+                                </svg>
+                            </div>
+                            <div>
+                                <span class="font-bold block text-slate-900 flex items-center gap-1.5">
+                                    <span>מאווררי פליטה עליונים בכיפה + תריסי צוּר</span>
+                                    <span class="text-[9px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded font-mono font-bold">Cupola Fans</span>
+                                </span>
+                                <span class="text-[10px] text-slate-500 font-medium">שואב אוויר מבפנים לבחוץ (Exhaust) | לחץ לבדיקה</span>
+                            </div>
+                        </div>
+                        <div class="text-left">
+                            <span id="badge-fan-top" class="px-2.5 py-1 rounded text-[11px] font-bold bg-slate-200 text-slate-600">כבוי</span>
+                            <span id="badge-shutter-top" class="block text-[10px] text-slate-500 font-bold mt-0.5">תריסי צוּר: סגורים (0%)</span>
+                        </div>
+                    </div>
+
+                    <!-- Bottom Fan & Damper Status -->
+                    <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center justify-between shadow-sm">
+                        <div class="flex items-center gap-3">
+                            <!-- Mechanical Iris Diaphragm Widget - Bottom Fan -->
+                            <div id="iris-bottom" class="iris-mech-widget group" onclick="toggleFanManual('bottom')" title="תריס צוּר מכני תחתון - לחץ להפעלה ידנית">
+                                <svg viewBox="0 0 100 115" class="w-full h-full drop-shadow">
+                                    <defs>
+                                        <linearGradient id="btm-flange-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                            <stop offset="0%" stop-color="#f8fafc"/>
+                                            <stop offset="35%" stop-color="#cbd5e1"/>
+                                            <stop offset="70%" stop-color="#94a3b8"/>
+                                            <stop offset="100%" stop-color="#64748b"/>
+                                        </linearGradient>
+                                        <linearGradient id="btm-piston-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                            <stop offset="0%" stop-color="#475569"/>
+                                            <stop offset="50%" stop-color="#f1f5f9"/>
+                                            <stop offset="100%" stop-color="#334155"/>
+                                        </linearGradient>
+                                        <linearGradient id="btm-blade1-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                            <stop offset="0%" stop-color="#f1f5f9"/>
+                                            <stop offset="45%" stop-color="#94a3b8"/>
+                                            <stop offset="100%" stop-color="#475569"/>
+                                        </linearGradient>
+                                        <linearGradient id="btm-blade2-grad" x1="100%" y1="0%" x2="0%" y2="100%">
+                                            <stop offset="0%" stop-color="#ffffff"/>
+                                            <stop offset="45%" stop-color="#cbd5e1"/>
+                                            <stop offset="100%" stop-color="#334155"/>
+                                        </linearGradient>
+                                        <linearGradient id="btm-blade3-grad" x1="50%" y1="100%" x2="50%" y2="0%">
+                                            <stop offset="0%" stop-color="#cbd5e1"/>
+                                            <stop offset="45%" stop-color="#94a3b8"/>
+                                            <stop offset="100%" stop-color="#1e293b"/>
+                                        </linearGradient>
+                                        <radialGradient id="btm-tunnel-grad" cx="50%" cy="50%" r="50%">
+                                            <stop offset="0%" stop-color="#0284c7" stop-opacity="0.35"/>
+                                            <stop offset="50%" stop-color="#0f172a"/>
+                                            <stop offset="100%" stop-color="#020617"/>
+                                        </radialGradient>
+                                        <radialGradient id="btm-fan-glow" cx="50%" cy="50%" r="50%">
+                                            <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.75"/>
+                                            <stop offset="60%" stop-color="#0284c7" stop-opacity="0.3"/>
+                                            <stop offset="100%" stop-color="#0284c7" stop-opacity="0"/>
+                                        </radialGradient>
+                                        <clipPath id="btm-aperture-clip">
+                                            <circle cx="50" cy="65" r="28"/>
+                                        </clipPath>
+                                    </defs>
+
+                                    <!-- Top Actuator Piston -->
+                                    <g class="iris-piston-group">
+                                        <rect x="42" y="2" width="16" height="13" rx="2" fill="url(#btm-piston-grad)" stroke="#1e293b" stroke-width="1.6"/>
+                                        <rect x="47" y="15" width="6" height="14" fill="url(#btm-piston-grad)" stroke="#1e293b" stroke-width="1.3" class="iris-shaft"/>
+                                    </g>
+
+                                    <!-- Outer Flange Ring -->
+                                    <circle cx="50" cy="65" r="45" fill="url(#btm-flange-grad)" stroke="#1e293b" stroke-width="2" class="iris-flange-ring"/>
+                                    <circle cx="50" cy="65" r="43.5" fill="none" stroke="#ffffff" stroke-width="0.8" opacity="0.6"/>
+                                    <circle cx="50" cy="65" r="29" fill="none" stroke="#1e293b" stroke-width="2"/>
+
+                                    <!-- 12 Perimeter Bolts -->
+                                    <g fill="#334155" stroke="#1e293b" stroke-width="1">
+                                        <circle cx="87" cy="65" r="2.8" fill="#cbd5e1"/><circle cx="87" cy="65" r="1.1"/>
+                                        <circle cx="82" cy="83.5" r="2.8" fill="#cbd5e1"/><circle cx="82" cy="83.5" r="1.1"/>
+                                        <circle cx="68.5" cy="97" r="2.8" fill="#cbd5e1"/><circle cx="68.5" cy="97" r="1.1"/>
+                                        <circle cx="50" cy="102" r="2.8" fill="#cbd5e1"/><circle cx="50" cy="102" r="1.1"/>
+                                        <circle cx="31.5" cy="97" r="2.8" fill="#cbd5e1"/><circle cx="31.5" cy="97" r="1.1"/>
+                                        <circle cx="18" cy="83.5" r="2.8" fill="#cbd5e1"/><circle cx="18" cy="83.5" r="1.1"/>
+                                        <circle cx="13" cy="65" r="2.8" fill="#cbd5e1"/><circle cx="13" cy="65" r="1.1"/>
+                                        <circle cx="18" cy="46.5" r="2.8" fill="#cbd5e1"/><circle cx="18" cy="46.5" r="1.1"/>
+                                        <circle cx="31.5" cy="33" r="2.8" fill="#cbd5e1"/><circle cx="31.5" cy="33" r="1.1"/>
+                                        <circle cx="50" cy="28" r="2.8" fill="#cbd5e1"/><circle cx="50" cy="28" r="1.1"/>
+                                        <circle cx="68.5" cy="33" r="2.8" fill="#cbd5e1"/><circle cx="68.5" cy="33" r="1.1"/>
+                                        <circle cx="82" cy="46.5" r="2.8" fill="#cbd5e1"/><circle cx="82" cy="46.5" r="1.1"/>
+                                    </g>
+
+                                    <!-- Aperture Tunnel & Fan Underneath -->
+                                    <g clip-path="url(#btm-aperture-clip)">
+                                        <circle cx="50" cy="65" r="28" fill="url(#btm-tunnel-grad)"/>
+                                        <circle cx="50" cy="65" r="26" fill="url(#btm-fan-glow)" class="iris-fan-glow-layer"/>
+
+                                        <!-- Spinning Fan (5 Blades) -->
+                                        <g class="iris-fan-rotor">
+                                             <path d="M50 65 Q58 48 50 37 Q42 48 50 65" fill="#0284c7" stroke="#0369a1" stroke-width="0.8"/>
+                                            <path d="M50 65 Q69 60 77 54 Q67 69 50 65" fill="#0284c7" stroke="#0369a1" stroke-width="0.8"/>
+                                            <path d="M50 65 Q65 81 67 92 Q53 83 50 65" fill="#0284c7" stroke="#0369a1" stroke-width="0.8"/>
+                                            <path d="M50 65 Q35 81 33 92 Q47 83 50 65" fill="#0284c7" stroke="#0369a1" stroke-width="0.8"/>
+                                            <path d="M50 65 Q31 60 23 54 Q33 69 50 65" fill="#0284c7" stroke="#0369a1" stroke-width="0.8"/>
+                                            <circle cx="50" cy="65" r="7.5" fill="#0f172a" stroke="#38bdf8" stroke-width="1.4"/>
+                                            <circle cx="50" cy="65" r="3" fill="#e0f2fe"/>
+                                        </g>
+
+                                        <!-- 3 Curved Mechanical Iris Blades -->
+                                        <g class="iris-blade-1" style="transform-origin: 74px 44px;">
+                                            <path d="M50 65 C63 51 74 46 78 44 C68 28 48 30 30 40 C37 48 43 57 50 65 Z" 
+                                                  fill="url(#btm-blade1-grad)" stroke="#1e293b" stroke-width="1.8" stroke-linejoin="round"/>
+                                            <path d="M50 65 C60 53 70 48 78 44" fill="none" stroke="#0f172a" stroke-width="2"/>
+                                            <circle cx="74" cy="44" r="1.6" fill="#1e293b"/>
+                                        </g>
+                                        <g class="iris-blade-2" style="transform-origin: 68px 89px;">
+                                            <path d="M50 65 C58 78 64 88 68 89 C82 75 79 53 69 36 C61 47 55 56 50 65 Z" 
+                                                  fill="url(#btm-blade2-grad)" stroke="#1e293b" stroke-width="1.8" stroke-linejoin="round"/>
+                                            <path d="M50 65 C57 76 63 84 68 89" fill="none" stroke="#0f172a" stroke-width="2"/>
+                                            <circle cx="68" cy="89" r="1.6" fill="#1e293b"/>
+                                        </g>
+                                        <g class="iris-blade-3" style="transform-origin: 24px 65px;">
+                                            <path d="M50 65 C35 68 27 66 24 65 C25 85 46 93 67 89 C59 78 54 69 50 65 Z" 
+                                                  fill="url(#btm-blade3-grad)" stroke="#1e293b" stroke-width="1.8" stroke-linejoin="round"/>
+                                            <path d="M50 65 C37 66 29 65 24 65" fill="none" stroke="#0f172a" stroke-width="2"/>
+                                            <circle cx="24" cy="65" r="1.6" fill="#1e293b"/>
+                                        </g>
+                                        <circle cx="50" cy="65" r="2.2" fill="#ffffff" stroke="#1e293b" stroke-width="1.2" class="iris-center-pin"/>
+                                    </g>
+                                </svg>
+                            </div>
+                            <div>
+                                <span class="font-bold block text-slate-900 flex items-center gap-1.5">
+                                    <span>יחידות אוורור היקפיות — מאווררי קירור + תריסי צוּר</span>
+                                    <span class="text-[9px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded font-mono font-bold">Cooling Fans</span>
+                                </span>
+                                <span class="text-[10px] text-slate-500 font-medium">מכניסים אוויר מבחוץ פנימה (Intake) | לחץ לבדיקה</span>
+                            </div>
+                        </div>
+                        <div class="text-left">
+                            <span id="badge-fan-bottom" class="px-2.5 py-1 rounded text-[11px] font-bold bg-slate-200 text-slate-600">כבוי</span>
+                            <span id="badge-shutter-bottom" class="block text-[10px] text-slate-500 font-bold mt-0.5">תריסי צוּר: סגורים (0%)</span>
+                        </div>
+                    </div>
+
+                    <!-- Heater Element Status -->
+                    <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div id="status-icon-heater" class="w-9 h-9 rounded-lg bg-slate-200 flex items-center justify-center text-slate-500">
+                                <i class="fa-solid fa-fire-burner text-base"></i>
+                            </div>
+                            <div>
+                                <span class="font-bold block text-slate-900">יחידות חימום עליונות — צמדי מאווררים + גופי חימום</span>
+                                <span class="text-[10px] text-slate-500 font-medium">הכנסת אוויר חם דרך גופי חימום זוהרים בתא</span>
+                            </div>
+                        </div>
+                        <div class="text-left">
+                            <span id="badge-heater" class="px-2.5 py-1 rounded text-[11px] font-bold bg-slate-200 text-slate-600">כבוי (0%)</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+        </section>
+
+        <!-- RIGHT COLUMN: Interactive 3D Chamber Visualization (7 Cols on LG) -->
+        <section class="lg:col-span-7 flex flex-col gap-4 min-h-[580px] lg:min-h-0">
+            <div class="panel flex-1 flex flex-col relative overflow-hidden">
+                
+                <!-- 3D View Controls Header Bar -->
+                <div class="panel-head" style="margin-bottom:12px">
+                    <h2><i class="fa-solid fa-cube"></i> תצוגה תלת-ממדית</h2>
+                    <div class="flex items-center gap-2">
+                        <button onclick="toggleDoorGlass()" id="btn-toggle-door" class="view-btn">
+                            <i class="fa-regular fa-window-maximize"></i> <span>דלת שקופה</span>
+                        </button>
+                        <button onclick="resetCamera3D()" class="view-btn">
+                            <i class="fa-solid fa-arrows-to-eye"></i> <span>איפוס מבט</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Three.js Canvas Container -->
+                <div id="canvas-container" class="w-full flex-1 rounded-lg bg-slate-100 relative border border-slate-200 cursor-grab active:cursor-grabbing overflow-hidden">
+                    <div id="tooltip3d"></div>
+
+                    <!-- Loading overlay: a calm skeleton on the canvas surface
+                         rather than a floating card over a dark blur. -->
+                    <div id="loading-overlay-3d" class="loader3d">
+                        <div class="loader3d-inner">
+                            <div class="loader3d-spinner" aria-hidden="true"></div>
+                            <p class="loader3d-title">טוען תצוגה תלת-ממדית</p>
+                            <p id="loading-step-text" class="loader3d-step">מאתחל מנוע גרפי…</p>
+                            <div class="loader3d-track">
+                                <div id="loading-progress-bar" class="loader3d-bar" style="width:25%"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- No numeric HUD over the canvas: the three actuator rows
+                         it used to show are the same three rows in "מצב הפעלה",
+                         and the demand is the pill in "סיכום מצב". The model
+                         itself shows what is running — spinning fans, open
+                         shutters, glowing elements. -->
+
+                    <!-- 3D Instructions Overlay -->
+                    <div class="absolute top-3 left-3 z-10 bg-white/85 backdrop-blur-sm border border-slate-200 px-2.5 py-1.5 rounded-lg text-[11px] text-slate-500 pointer-events-none flex items-center gap-2">
+                        <i class="fa-solid fa-hand-pointer text-slate-400"></i> גרירה לסיבוב · גלילה לזום · לחיצה על רכיב לשליטה
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Diagnostics / IoT Telemetry Simulation Modal -->
+    <div id="diag-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-white border border-slate-200 rounded-2xl shadow-2xl max-w-md w-full p-5 text-slate-900 text-right" dir="rtl">
+            <div class="flex justify-between items-center pb-3 border-b border-slate-200 mb-4">
+                <h3 class="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                    <i class="fa-solid fa-network-wired text-sky-600"></i> בדיקת תקשורת ורכיבים (IoT Diagnostics)
+                </h3>
+                <button onclick="toggleDiagnosticsModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <p id="diag-note" class="text-xs text-slate-500 mb-4"></p>
+            <div class="space-y-2.5 text-xs">
+                <!-- S2 Sensor Toggle -->
+                <div class="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200">
+                    <div class="flex items-center gap-2">
+                        <span id="diag-dot-s2" class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                        <span class="font-bold text-slate-800">חיישן 2 (S2 - עליון ימין)</span>
+                    </div>
+                    <button onclick="toggleComponentFault('s2')" id="diag-btn-s2" data-sim-only class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-200 text-slate-700 hover:bg-slate-300 transition">
+                        דמה נתק תקשורת
+                    </button>
+                </div>
+                <!-- Top Fan Toggle -->
+                <div class="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200">
+                    <div class="flex items-center gap-2">
+                        <span id="diag-dot-topfan" class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                        <span class="font-bold text-slate-800">מאוורר עליון (Iris Fan Duct)</span>
+                    </div>
+                    <button onclick="toggleComponentFault('topfan')" id="diag-btn-topfan" data-sim-only class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-200 text-slate-700 hover:bg-slate-300 transition">
+                        דמה נתק תקשורת
+                    </button>
+                </div>
+                <!-- Ambient Sensor S0 Toggle -->
+                <div class="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200">
+                    <div class="flex items-center gap-2">
+                        <span id="diag-dot-s0" class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                        <span class="font-bold text-slate-800">חיישן סביבה חיצוני (S0)</span>
+                    </div>
+                    <button onclick="toggleComponentFault('s0')" id="diag-btn-s0" data-sim-only class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-200 text-slate-700 hover:bg-slate-300 transition">
+                        דמה נתק תקשורת
+                    </button>
+                </div>
+            </div>
+            <div class="mt-5 flex justify-end">
+                <button onclick="toggleDiagnosticsModal()" class="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold transition shadow-sm">
+                    סגור חלון
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* ==========================================================================
+           1. Application State & Simulation Controllers
+           ========================================================================== */
+        const state = {
+            ambientTemp: 21.0,
+            ambientRH: 45.0,
+            
+            // Target configuration
+            targetMode: 'relative', // 'relative' (+Δ) or 'absolute' (°C)
+            targetValue: 10.0,       // e.g. +10°C relative or 31°C absolute
+            calculatedTargetTemp: 31.0,
+
+            // Sensor Readings
+            sensors: [
+                { temp: 28.5, rh: 50.0 },
+                { temp: 29.0, rh: 51.0 },
+                { temp: 28.8, rh: 49.5 },
+                { temp: 28.2, rh: 52.0 },
+                { temp: 28.5, rh: 48.5 }
+            ],
+            avgTemp: 28.6,
+            avgRH: 50.2,
+
+            // System Operational Modes: 'AUTO' | 'VENTILATION' | 'HEATING' | 'OFF'
+            mode: 'AUTO',
+
+            // Actuator States (0.0 to 1.0 smooth transitions)
+            fanTopSpeed: 0,       // 0 to 1
+            fanBottomSpeed: 0,    // 0 to 1
+            shutterTopOpen: 0,    // 0 (closed) to 1 (90 deg open)
+            shutterBottomOpen: 0, // 0 to 1
+            heaterIntensity: 0,   // 0 to 1
+
+            // Target setpoints for smooth animation
+            targetFanTop: 0,
+            targetFanBottom: 0,
+            targetShutterTop: 0,
+            targetShutterBottom: 0,
+            targetHeater: 0,
+
+            // Door rendering mode
+            doorTransparent: true,
+
+            // Derived demand hint for UI (IDLE | VENTILATION | HEATING)
+            demand: 'IDLE',
+
+            // IoT Telemetry & Fault Simulator (For Raspberry Pi & Firestore Integration)
+            faults: {
+                s2: false,
+                topfan: false,
+                s0: false
+            },
+
+            /* ---- Multi-chamber / Firestore additions ---------------------
+               source: 'live'  -> telemetry and actuator state come from the
+                                  Raspberry Pi via Firestore; this browser is
+                                  a read-only observer plus a setpoint writer.
+                       'sim'   -> the local physics model drives everything and
+                                  nothing is written to Firestore.
+               ------------------------------------------------------------- */
+            source: 'live',
+            chamberId: null,
+            sensorCount: 5,
+            sensorLabels: null,
+            piOnline: false,
+            // Outstanding setpoint we have written but the Pi has not confirmed.
+            desiredMode: null,
+            pendingMode: false
+        };
+
+        /* Set by the module script below once Firestore is wired up. Until
+           then every call is a no-op, so the UI still renders standalone. */
+        let BackendAdapter = {
+            sendCommand(command, payload = {}) {
+                console.log('[BackendAdapter not connected]', command, payload);
+                return Promise.resolve({ ok: false, reason: 'not-connected' });
+            }
+        };
+
+        function setBackendAdapter(adapter) {
+            BackendAdapter = adapter;
+        }
+
+        const isLive = () => state.source === 'live';
+
+        /* ==========================================================================
+           2. Calculation & UI Update Logic
+
+           Data flow direction depends on the source:
+             live -> Firestore telemetry has already been written into `state`
+                     by applyTelemetry(); here we only push state into the DOM.
+             sim  -> the sensor inputs are editable, so they are the source of
+                     truth and get read back into `state`.
+           ========================================================================== */
+        function updateCalculations() {
+            const n = state.sensorCount;
+
+            if (isLive()) {
+                for (let i = 1; i <= n; i++) {
+                    const s = state.sensors[i - 1];
+                    if (!s) continue;
+                    const tEl = document.getElementById(`s${i}-temp`);
+                    const rEl = document.getElementById(`s${i}-rh`);
+                    if (tEl) tEl.value = s.temp.toFixed(1);
+                    if (rEl) rEl.value = s.rh.toFixed(1);
+                }
+            } else {
+                // Simulator mode: the internal sensor fields are authoritative.
+                // Ambient is NOT read from the DOM — it is a measured value the
+                // controller supplies, so the simulator owns its drift instead.
+                let sumTemp = 0;
+                let sumRH = 0;
+                let counted = 0;
+                for (let i = 1; i <= n; i++) {
+                    const tEl = document.getElementById(`s${i}-temp`);
+                    const rEl = document.getElementById(`s${i}-rh`);
+                    if (!tEl || !rEl) continue;
+                    const t = parseFloat(tEl.value) || state.ambientTemp;
+                    const r = parseFloat(rEl.value) || state.ambientRH;
+                    state.sensors[i - 1] = { temp: t, rh: r };
+                    sumTemp += t;
+                    sumRH += r;
+                    counted++;
+                }
+                if (counted > 0) {
+                    state.avgTemp = sumTemp / counted;
+                    state.avgRH = sumRH / counted;
+                }
+            }
+
+            // Target Temp Calculation
+            if (state.targetMode === 'relative') {
+                state.calculatedTargetTemp = state.ambientTemp + state.targetValue;
+            } else {
+                state.calculatedTargetTemp = state.targetValue;
+            }
+
+            /* Summary strip — the single place every derived figure is shown.
+               Ambient, internal average, calculated target and deviation each
+               used to appear twice on this page; they now appear here only. */
+            const delta = state.avgTemp - state.calculatedTargetTemp;
+            const deltaAbs = Math.abs(delta);
+            const sumOutside = document.getElementById('sum-outside');
+            const sumOutsideRh = document.getElementById('sum-outside-rh');
+            const sumInside = document.getElementById('sum-inside');
+            const sumInsideRh = document.getElementById('sum-inside-rh');
+            const sumTarget = document.getElementById('sum-target');
+            const sumOffsetLabel = document.getElementById('sum-offset-label');
+            const sumDelta = document.getElementById('sum-delta');
+            const sumDeltaHint = document.getElementById('sum-delta-hint');
+            if (sumOutside) sumOutside.innerText = state.ambientTemp.toFixed(1) + '°C';
+            if (sumOutsideRh) sumOutsideRh.innerText = state.ambientRH.toFixed(0) + '%';
+            if (sumInside) sumInside.innerText = state.avgTemp.toFixed(1) + '°C';
+            if (sumInsideRh) sumInsideRh.innerText = state.avgRH.toFixed(1) + '%';
+            if (sumTarget) sumTarget.innerText = state.calculatedTargetTemp.toFixed(1) + '°C';
+            if (sumOffsetLabel) sumOffsetLabel.innerText = state.targetMode === 'relative' ? ('Δ ' + (state.targetValue >= 0 ? '+' : '') + state.targetValue.toFixed(1) + '°C') : 'מוחלט';
+            if (sumDelta) {
+                sumDelta.innerText = (delta >= 0 ? '+' : '') + delta.toFixed(1) + '°C';
+                sumDelta.className = 'stat-value';
+                sumDelta.style.color = deltaAbs <= 0.5 ? '#0b7057' : delta > 0 ? '#c2410c' : 'var(--accent)';
+            }
+            if (sumDeltaHint) sumDeltaHint.innerText = deltaAbs <= 0.5 ? 'בטווח' : delta > 0 ? 'חם מהיעד' : 'קר מהיעד';
+
+            // Slider sync (relative mode only)
+            const slider = document.getElementById('offset-slider');
+            if (slider && state.targetMode === 'relative') {
+                const v = parseFloat(state.targetValue);
+                if (!isNaN(v)) slider.value = String(Math.min(20, Math.max(-10, v)));
+            }
+
+            // Control loop evaluation
+            evaluateControlLoop();
+        }
+
+        /* Setpoint writes are debounced: dragging the offset slider would
+           otherwise fire a Firestore write per pixel.
+           These persist in simulator mode too — see the note in
+           chamber-store.js sendCommand(). */
+        let targetPublishTimer = null;
+        function publishTarget() {
+            clearTimeout(targetPublishTimer);
+            targetPublishTimer = setTimeout(() => {
+                BackendAdapter.sendCommand('setTarget', {
+                    targetMode: state.targetMode,
+                    targetValue: state.targetValue
+                });
+            }, 600);
+        }
+
+        /* Recompute + render, then push the new setpoint to the controller. */
+        function onTargetChanged() {
+            updateCalculations();
+            publishTarget();
+        }
+
+        /* Operator picked a different way of expressing the target. Switching
+           resets the value to a sensible default for that mode, because +10 Δ°C
+           and 10 °C absolute mean very different things. Rendering is delegated
+           to renderTargetModeUI so there is a single place that styles it. */
+        function setTargetMode(mode) {
+            state.targetMode = mode;
+            state.targetValue = mode === 'relative' ? 10.0 : 31.0;
+
+            const valInput = document.getElementById('target-value-input');
+            if (valInput) valInput.value = state.targetValue.toFixed(1);
+
+            renderTargetModeUI(mode);
+            onTargetChanged();
+        }
+
+        document.getElementById('target-value-input').addEventListener('input', (e) => {
+            state.targetValue = parseFloat(e.target.value) || 0;
+            onTargetChanged();
+        });
+
+        /* No listeners on the ambient fields: they are read-only displays of the
+           external sensor, mirrored from state by updateCalculations(). */
+
+        // Offset stepper ± and slider + presets (relative mode)
+        (function bindOffsetControls() {
+            const minus = document.getElementById('offset-minus');
+            const plus = document.getElementById('offset-plus');
+            const slider = document.getElementById('offset-slider');
+            const input = document.getElementById('target-value-input');
+            function step(d) {
+                if (state.targetMode !== 'relative') setTargetMode('relative');
+                state.targetValue = Math.round((state.targetValue + d) * 2) / 2;
+                state.targetValue = Math.min(20, Math.max(-10, state.targetValue));
+                input.value = state.targetValue.toFixed(1);
+                onTargetChanged();
+            }
+            if (minus) minus.addEventListener('click', () => step(-0.5));
+            if (plus) plus.addEventListener('click', () => step(+0.5));
+            if (slider) slider.addEventListener('input', (e) => {
+                if (state.targetMode !== 'relative') setTargetMode('relative');
+                state.targetValue = parseFloat(e.target.value) || 0;
+                input.value = state.targetValue.toFixed(1);
+                onTargetChanged();
+            });
+            document.querySelectorAll('.offset-preset').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const v = parseFloat(btn.getAttribute('data-offset'));
+                    if (state.targetMode !== 'relative') setTargetMode('relative');
+                    state.targetValue = v;
+                    input.value = v.toFixed(1);
+                    onTargetChanged();
+                });
+            });
+        })();
+
+        const MODE_LABELS = {
+            AUTO: 'אוטומטי',
+            VENTILATION: 'אוורור ידני',
+            HEATING: 'חימום ידני',
+            OFF: 'כבוי'
+        };
+
+        /* Paints the mode selector. `highlight` is the mode to show as chosen —
+           the requested one while a change is in flight, otherwise the mode the
+           controller actually reports. */
+        function renderModeButtons(highlight, pending) {
+            ['auto', 'vent', 'heat', 'off'].forEach(m => {
+                const btn = document.getElementById(`btn-mode-${m}`);
+                if (btn) btn.className = 'mode-btn';
+            });
+
+            const key = highlight.toLowerCase() === 'ventilation' ? 'vent'
+                      : highlight.toLowerCase() === 'heating' ? 'heat'
+                      : highlight.toLowerCase();
+            const activeBtn = document.getElementById(`btn-mode-${key}`);
+            if (activeBtn) {
+                activeBtn.className = 'mode-btn ' + (
+                    // Requested but not yet confirmed by the controller.
+                    pending ? 'pending'
+                    : highlight === 'HEATING' ? 'on-heat'
+                    : highlight === 'OFF' ? 'on-off'
+                    : 'on'
+                );
+            }
+
+            const sysBadge = document.getElementById('sys-mode-badge');
+            if (sysBadge) {
+                const label = MODE_LABELS[highlight] || highlight;
+                sysBadge.innerText = pending ? `ממתין: ${label}` : `מצב: ${label}`;
+                sysBadge.className = 'pill ' + (pending ? 'pill-warm' : 'pill-cool');
+            }
+        }
+
+        /* USER INTENT. Every mode control in the UI — the four buttons, the 2D
+           iris widgets and the 3D click handlers — funnels through here.
+
+           The setpoint is written to Firestore in both modes; what differs is
+           who is believed afterwards. Live: the chamber does not change state
+           until the Pi confirms, so a pending badge is shown. Simulator: there
+           is no controller to confirm, so this browser acts as one immediately
+           — but the setpoint is still saved for the real Pi to pick up. */
+        function setSystemMode(newMode) {
+            state.desiredMode = newMode;
+
+            if (isLive()) {
+                state.pendingMode = state.mode !== newMode;
+                renderModeButtons(newMode, state.pendingMode);
+            } else {
+                state.mode = newMode;
+                state.pendingMode = false;
+                renderModeButtons(newMode, false);
+            }
+
+            BackendAdapter.sendCommand('setSystemMode', { mode: newMode });
+            updateCalculations();
+        }
+
+        /* CONTROLLER TRUTH. Driven by chambers/{id}.reported.mode arriving over
+           onSnapshot, which clears any outstanding pending badge. */
+        function applyReportedMode(mode) {
+            state.mode = mode;
+            state.pendingMode = !!(state.desiredMode && state.desiredMode !== mode);
+            renderModeButtons(state.pendingMode ? state.desiredMode : mode, state.pendingMode);
+        }
+
+        // Click on 2D Mechanical Iris widget directly
+        function toggleFanManual(target) {
+            if (state.mode === 'VENTILATION') {
+                setSystemMode('OFF');
+            } else {
+                setSystemMode('VENTILATION');
+            }
+        }
+
+        // Diagnostics Modal & Telemetry Fault Simulator
+        function toggleDiagnosticsModal() {
+            const modal = document.getElementById('diag-modal');
+            if (!modal) return;
+            if (modal.classList.contains('hidden')) {
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            } else {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }
+        }
+
+        /* Fault injection is a simulator affordance. With a real controller
+           attached, the offline flags come from telemetry instead — faking them
+           would hide a genuine sensor dropout. */
+        function toggleComponentFault(comp) {
+            if (isLive()) return;
+            state.faults[comp] = !state.faults[comp];
+            renderFaultIndicator(comp);
+            updateOfflineMarkers3D();
+        }
+
+        function renderFaultIndicator(comp) {
+            const isFault = state.faults[comp];
+            const btn = document.getElementById(`diag-btn-${comp}`);
+            const dot = document.getElementById(`diag-dot-${comp}`);
+            if (!btn || !dot) return;
+
+            dot.className = isFault
+                ? 'w-2.5 h-2.5 rounded-full bg-red-500 animate-ping'
+                : 'w-2.5 h-2.5 rounded-full bg-emerald-500';
+
+            if (isLive()) {
+                // Read-only reflection of real hardware status.
+                btn.className = 'px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed';
+                btn.innerText = isFault ? 'מנותק (מהבקר)' : 'מקושר (מהבקר)';
+                btn.disabled = true;
+            } else {
+                btn.disabled = false;
+                btn.className = isFault
+                    ? 'px-2.5 py-1 rounded-lg text-[11px] font-bold bg-red-600 text-white shadow-sm transition'
+                    : 'px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-200 text-slate-700 hover:bg-slate-300 transition';
+                btn.innerText = isFault ? 'החזר תקשורת (Online)' : 'דמה נתק תקשורת';
+            }
+        }
+
+        /* Applies real sensor-health flags from telemetry onto the existing
+           fault indicators and the 3D holographic offline markers. */
+        function applySensorHealth(telemetry) {
+            const sensors = (telemetry && telemetry.sensors) || [];
+            const s2 = sensors.find(s => s.id === 2);
+            state.faults.s2 = !!(s2 && s2.online === false);
+            state.faults.s0 = !!(telemetry && telemetry.ambient && telemetry.ambient.online === false);
+            // No per-fan health field yet; the Pi reports actuator faults via
+            // reported.* once that is wired on the hardware side.
+            ['s2', 's0', 'topfan'].forEach(renderFaultIndicator);
+            updateOfflineMarkers3D();
+        }
+
+        /* ==========================================================================
+           3. Control Loop Engine
+
+           In LIVE mode the Raspberry Pi owns this decision. The browser must not
+           compute actuator targets itself, or it would fight the controller and
+           show fan/heater animations that do not match the real hardware — so it
+           only renders whatever `reported` says. The local decision logic below
+           runs in simulator mode only, where this browser IS the controller.
+           ========================================================================== */
+        function evaluateControlLoop() {
+            let demandVentilation = false;
+            let demandHeating = false;
+
+            if (isLive()) {
+                // Actuator targets were assigned by applyReported(); derive the
+                // demand label from them rather than re-deciding.
+                demandVentilation = state.targetFanTop > 0.5;
+                demandHeating = state.targetHeater > 0.5;
+            } else {
+                if (state.mode === 'AUTO') {
+                    const tempDiff = state.calculatedTargetTemp - state.avgTemp;
+                    // Deadband tolerance of 0.3°C to avoid chattering
+                    if (tempDiff > 0.3) {
+                        demandHeating = true; // Chamber is colder than target -> Heat
+                    } else if (tempDiff < -0.3) {
+                        demandVentilation = true; // Chamber is hotter than target -> Vent
+                    }
+                } else if (state.mode === 'VENTILATION') {
+                    demandVentilation = true;
+                } else if (state.mode === 'HEATING') {
+                    demandHeating = true;
+                }
+
+                // Update Target States for Actuators
+                state.targetFanTop = demandVentilation ? 1.0 : 0.0;
+                state.targetFanBottom = demandVentilation ? 1.0 : 0.0;
+                state.targetShutterTop = demandVentilation ? 1.0 : 0.0;
+                state.targetShutterBottom = demandVentilation ? 1.0 : 0.0;
+                state.targetHeater = demandHeating ? 1.0 : 0.0;
+            }
+
+            // Demand label for the summary strip
+            state.demand = demandHeating ? 'HEATING' : demandVentilation ? 'VENTILATION' : 'IDLE';
+            const demandEl = document.getElementById('demand-pill');
+            const label = state.demand === 'HEATING' ? 'חימום פעיל'
+                        : state.demand === 'VENTILATION' ? 'אוורור פעיל'
+                        : 'בטווח היעד';
+            const pillCls = 'pill ' + (state.demand === 'HEATING' ? 'pill-warm'
+                                     : state.demand === 'VENTILATION' ? 'pill-cool'
+                                     : 'pill-ok');
+
+            if (demandEl) { demandEl.innerText = label; demandEl.className = pillCls; }
+        }
+
+        /* The local physics model now lives in js/simulator.js. It runs only
+           when this chamber has no live controller, and it never writes to
+           Firestore — so a demo can never corrupt real chamber data. The module
+           script at the bottom of this file registers it. */
+        let Simulator = null;
+        function setSimulator(sim) { Simulator = sim; }
+
+        // Called from the "פיזור אקראי" button, which is hidden in live mode.
+        function randomizeInternalSensors() {
+            if (isLive() || !Simulator) return;
+            Simulator.randomize();
+        }
+
+        /* ==========================================================================
+           4. Three.js 3D Graphics Engine & Mechanical Iris Diaphragm
+           ========================================================================== */
+        let scene, camera, renderer, controls;
+        let wallCoolingFans = [];       // Large cooling fan rotors in perimeter wall units
+        let wallTwinHeatingFans = [];   // Small twin fan rotors on top of wall units
+        let wallIrisBlades = [];        // Iris blades on wall cooling units
+        let topCupolaFans = [];         // Exhaust fans ringing the hexagonal centre roof cupola (12 fans, 2 per facet)
+        let topCupolaIrisBlades = [];   // Iris / shutter blades on the top cupola
+        let heatingElements = [];       // Glowing heating elements and internal lights
+        let airflowParticles = null;
+        let doorMesh = null;
+        let offlineMarkers = {};
+
+        /* ======================================================================
+           Chamber dimensions, derived from the SolidWorks assembly
+           ("Climate Control Chamber IV.EASM").
+
+           The assembly is HEXAGONAL:
+             5 x "Wall IV" + 1 x "Door"        -> 6 faces
+             6 x "Upper Leg" + 6 x "Lower Leg" -> 6 two-piece corner legs
+             6 x "Roof Face" + 6 x "Roof axis" -> 6 sloping roof panels
+             1 x "Center roof"                 -> Hexagonal cupola on roof ridge
+             5 x "H&V assembly"                -> one heating/ventilation unit
+                                                  per wall; the door face has none
+             5 x "120x12x38 fan"               -> the main cooling fan per unit
+            10 x "Fan60"                       -> two 60 mm fans per unit
+            20 x "Heater"                      -> four heater rods per unit
+            12 x FAN / Propeller / HOUSING     -> twelve exhaust fans on the
+                                                  hexagonal centre roof cupola (2 per facet)
+           ====================================================================== */
+        const HEX_SIDES = 6;
+        const HEX_R = 6.4;              // Chamber outer radius to corners
+        const HEX_WALL_H = 10.5;        // Vertical wall height
+        const HEX_LEG_JOINT_Y = 5.25;   // Upper Leg / Lower Leg splice height
+        const HEX_CUPOLA_R = 2.45;      // Radius the roof panels rise to
+        const HEX_ROOF_H = 2.0;         // Rise from eaves to the cupola base
+        const HEX_CUPOLA_H = 1.30;      // Hexagonal cupola collar height
+        const DOOR_FACE = 0;            // Face 0 carries the door, centred on +Z
+
+        // Faces 1..5 carry an H&V assembly — exactly the 5 in the CAD assembly.
+        const WALL_FACES = [1, 2, 3, 4, 5];
+
+        function init3D() {
+            const container = document.getElementById('canvas-container');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            // Scene setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xdceeff);
+            scene.fog = new THREE.Fog(0xdceeff, 65, 160);
+
+            // Camera setup - elevated perspective matching CAD viewport
+            camera = new THREE.PerspectiveCamera(44, width / height, 0.1, 1000);
+            camera.position.set(22, 19, 25);
+
+            // Renderer setup
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(width, height);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            if (THREE.sRGBEncoding) renderer.outputEncoding = THREE.sRGBEncoding;
+            if (THREE.ACESFilmicToneMapping) { renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.08; }
+            container.appendChild(renderer.domElement);
+
+            // OrbitControls setup
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.target.set(0, 6.2, 0);
+            controls.maxPolarAngle = Math.PI / 2 + 0.08;
+
+            // Ambient & Key Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.88);
+            scene.add(ambientLight);
+
+            const mainLight = new THREE.DirectionalLight(0xffffff, 0.95);
+            mainLight.position.set(22, 38, 22);
+            mainLight.castShadow = true;
+            mainLight.shadow.mapSize.width = 1024;
+            mainLight.shadow.mapSize.height = 1024;
+            scene.add(mainLight);
+
+            const fillLight = new THREE.DirectionalLight(0xe2e8f0, 0.55);
+            fillLight.position.set(-22, 16, -20);
+            scene.add(fillLight);
+
+            // Build Chamber Components, reporting genuine progress as we go.
+            setLoadingStep('בונה מבנה התא', 35);
+            buildChamberStructure();
+            setLoadingStep('מרכיב יחידות אוורור וחימום', 55);
+            buildModularWallFanUnits();
+            setLoadingStep('מרכיב מאווררי גג ותריסים', 72);
+            buildTopCupolaFans();
+            buildInternalSensors3D();
+            setLoadingStep('מכין סביבה ותנועת אוויר', 88);
+            buildAirflowParticles();
+            buildGroundAndExternal();
+            init3DInteraction();
+
+            // Resize listener
+            window.addEventListener('resize', onWindowResize);
+
+            // Start Animation Loop
+            animate3D();
+        }
+
+        /* Corner vertices of the regular hexagon.
+           phi starts at 60° so that face 0 — the span between vertex 0 and
+           vertex 1 — is centred on +Z, facing the default camera. That face is
+           the door. */
+        function getHexVertices(radius) {
+            const verts = [];
+            for (let k = 0; k < HEX_SIDES; k++) {
+                const phi = (Math.PI / 3) + (k * Math.PI / 3);
+                verts.push(new THREE.Vector3(radius * Math.cos(phi), 0, radius * Math.sin(phi)));
+            }
+            return verts;
+        }
+
+        /* Geometry of one face: its endpoints, midpoint, width, and the two
+           normals. Used by every builder so the maths lives in one place. */
+        function getFace(verts, k) {
+            const p1 = verts[k];
+            const p2 = verts[(k + 1) % HEX_SIDES];
+            const dir = new THREE.Vector3().subVectors(p2, p1);
+            /* Vertex winding runs counter-clockwise, so for an edge direction
+               (dx, dz) the vector (-dz, dx) points TOWARDS the axis. Getting
+               these two the wrong way round mounted every H&V unit on the
+               outside of the chamber, so verify with the assertion below if
+               the geometry is ever re-orientated. */
+            return {
+                p1, p2, dir,
+                width: dir.length(),
+                mid: new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5),
+                inward: new THREE.Vector3(-dir.z, 0, dir.x).normalize(),
+                outward: new THREE.Vector3(dir.z, 0, -dir.x).normalize()
+            };
+        }
+
+        /* ==========================================================================
+           1. Hexagonal Chamber Structure (5 Glass Walls + Door, 6 Two-Piece Legs, Green Roof)
+           ========================================================================== */
+        function buildChamberStructure() {
+            const chamberGroup = new THREE.Group();
+
+            const frameMat = new THREE.MeshStandardMaterial({
+                color: 0x94a3b8,
+                metalness: 0.82,
+                roughness: 0.28
+            });
+
+            const whiteMat = new THREE.MeshStandardMaterial({
+                color: 0xf8fafc,
+                metalness: 0.35,
+                roughness: 0.45
+            });
+
+            /* Translucent lilac polycarbonate — the "Wall IV" panels.
+               High transmission washes the tint out completely against the
+               bright sky background, so keep transmission moderate and let
+               opacity carry the colour, matching the CAD preview render. */
+            const wallGlassMat = new THREE.MeshPhysicalMaterial({
+                color: 0xb264d6,
+                transparent: true,
+                // Matches the saturation of the CAD render, where the walls read
+                // as clearly magenta rather than near-clear glass.
+                opacity: 0.52,
+                roughness: 0.10,
+                metalness: 0.0,
+                // transmission is deliberately 0: any non-zero value makes the
+                // physical-material refraction path dominate and washes the
+                // tint out entirely against the bright sky.
+                transmission: 0.0,
+                clearcoat: 0.6,
+                clearcoatRoughness: 0.18,
+                side: THREE.DoubleSide
+            });
+
+            // Translucent emerald polycarbonate — the 6 "Roof Face" panels.
+            const roofGlassMat = new THREE.MeshPhysicalMaterial({
+                color: 0x1eb257,
+                transparent: true,
+                opacity: 0.50,
+                roughness: 0.10,
+                metalness: 0.0,
+                transmission: 0.0,
+                clearcoat: 0.6,
+                clearcoatRoughness: 0.18,
+                side: THREE.DoubleSide
+            });
+
+            // Translucent Purple Polycarbonate (CAD "Center roof" lid)
+            const cupolaGlassMat = new THREE.MeshPhysicalMaterial({
+                color: 0x8b34d8,
+                transparent: true,
+                opacity: 0.62,
+                roughness: 0.14,
+                metalness: 0.0,
+                transmission: 0.0,
+                clearcoat: 0.7,
+                clearcoatRoughness: 0.15,
+                side: THREE.DoubleSide
+            });
+
+            const footMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.8, roughness: 0.3 });
+
+            const vCorners = getHexVertices(HEX_R);
+
+            /* ==================================================================
+               A. Six two-piece corner legs.
+                  The CAD splits each into "Lower Leg" + "Upper Leg" joined by a
+                  "Connection for Legs" collar carrying two "Ring" parts — which
+                  is why there are 12 connections and 24 rings for 6 legs.
+               ================================================================== */
+            const lowerLegGeo = new THREE.CylinderGeometry(0.13, 0.13, HEX_LEG_JOINT_Y, 16);
+            const upperLegGeo = new THREE.CylinderGeometry(0.115, 0.115, HEX_WALL_H - HEX_LEG_JOINT_Y + 0.5, 16);
+            const collarGeo = new THREE.CylinderGeometry(0.175, 0.175, 0.34, 16);
+            const ringGeo = new THREE.TorusGeometry(0.165, 0.028, 8, 20);
+            const footGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.5, 16);
+
+            vCorners.forEach((v) => {
+                const lower = new THREE.Mesh(lowerLegGeo, whiteMat);
+                lower.position.set(v.x, HEX_LEG_JOINT_Y / 2, v.z);
+                lower.castShadow = true;
+                chamberGroup.add(lower);
+
+                const upper = new THREE.Mesh(upperLegGeo, whiteMat);
+                upper.position.set(v.x, HEX_LEG_JOINT_Y + (HEX_WALL_H - HEX_LEG_JOINT_Y + 0.5) / 2 - 0.25, v.z);
+                upper.castShadow = true;
+                chamberGroup.add(upper);
+
+                // Splice collar plus the two retaining rings.
+                const collar = new THREE.Mesh(collarGeo, frameMat);
+                collar.position.set(v.x, HEX_LEG_JOINT_Y, v.z);
+                chamberGroup.add(collar);
+
+                [-0.21, 0.21].forEach((dy) => {
+                    const ring = new THREE.Mesh(ringGeo, frameMat);
+                    ring.rotation.x = Math.PI / 2;
+                    ring.position.set(v.x, HEX_LEG_JOINT_Y + dy, v.z);
+                    chamberGroup.add(ring);
+                });
+
+                const foot = new THREE.Mesh(footGeo, footMat);
+                foot.position.set(v.x, -0.25, v.z);
+                chamberGroup.add(foot);
+            });
+
+            /* ==================================================================
+               B. Horizontal reinforcement rails, 4 tiers around the hexagon.
+                  The two lower tiers stop short of the door opening.
+               ================================================================== */
+            const DOOR_W = 3.0;
+            const DOOR_H = 7.45;
+
+            const railLevels = [
+                { y: 0.10, clearDoor: true },       // Bottom rail
+                { y: 4.05, clearDoor: true },       // Carries the H&V units
+                { y: DOOR_H, clearDoor: false },    // Door header
+                { y: HEX_WALL_H, clearDoor: false } // Top eaves rail
+            ];
+
+            railLevels.forEach((tier) => {
+                for (let k = 0; k < HEX_SIDES; k++) {
+                    const f = getFace(vCorners, k);
+                    const axis = f.dir.clone().normalize();
+
+                    if (k === DOOR_FACE && tier.clearDoor) {
+                        // Two stubs, leaving the doorway clear in the middle.
+                        const segLen = (f.width - DOOR_W) / 2;
+                        [[f.p1, f.p2], [f.p2, f.p1]].forEach(([a, b]) => {
+                            const stub = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.22, segLen), frameMat);
+                            const pos = a.clone().lerp(b, (segLen / 2) / f.width);
+                            stub.position.set(pos.x, tier.y, pos.z);
+                            stub.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), axis);
+                            chamberGroup.add(stub);
+                        });
+                        continue;
+                    }
+
+                    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.22, f.width), frameMat);
+                    rail.position.set(f.mid.x, tier.y, f.mid.z);
+                    rail.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), axis);
+                    rail.castShadow = true;
+                    chamberGroup.add(rail);
+                }
+            });
+
+            /* ==================================================================
+               C. Five translucent "Wall IV" panels + one door face.
+               ================================================================== */
+            for (let k = 0; k < HEX_SIDES; k++) {
+                const f = getFace(vCorners, k);
+                const axis = f.dir.clone().normalize();
+
+                if (k !== DOOR_FACE) {
+                    const wallPanel = new THREE.Mesh(new THREE.BoxGeometry(0.06, HEX_WALL_H, f.width), wallGlassMat);
+                    wallPanel.position.set(f.mid.x, HEX_WALL_H / 2, f.mid.z);
+                    wallPanel.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), axis);
+                    chamberGroup.add(wallPanel);
+                    continue;
+                }
+
+                // ---- Door face -------------------------------------------------
+                const sideW = (f.width - DOOR_W) / 2;
+
+                // Glass strips either side of the doorway
+                [[f.p1, f.p2], [f.p2, f.p1]].forEach(([a, b]) => {
+                    const panel = new THREE.Mesh(new THREE.BoxGeometry(0.06, DOOR_H, sideW), wallGlassMat);
+                    const pos = a.clone().lerp(b, (sideW / 2) / f.width);
+                    panel.position.set(pos.x, DOOR_H / 2, pos.z);
+                    panel.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), axis);
+                    chamberGroup.add(panel);
+                });
+
+                // Transom above the door
+                const transomH = HEX_WALL_H - DOOR_H;
+                const transom = new THREE.Mesh(new THREE.BoxGeometry(0.06, transomH, f.width), wallGlassMat);
+                transom.position.set(f.mid.x, DOOR_H + transomH / 2, f.mid.z);
+                transom.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), axis);
+                chamberGroup.add(transom);
+
+                // Jamb posts
+                const jambGeo = new THREE.BoxGeometry(0.12, DOOR_H, 0.12);
+                [[f.p1, f.p2], [f.p2, f.p1]].forEach(([a, b]) => {
+                    const jamb = new THREE.Mesh(jambGeo, whiteMat);
+                    const pos = a.clone().lerp(b, sideW / f.width);
+                    jamb.position.set(pos.x, DOOR_H / 2, pos.z);
+                    chamberGroup.add(jamb);
+                });
+
+                // The door itself (opacity toggled by toggleDoorGlass)
+                const doorGroup = new THREE.Group();
+                const doorGlass = new THREE.Mesh(new THREE.BoxGeometry(0.06, DOOR_H - 0.1, DOOR_W - 0.1), wallGlassMat);
+                doorGlass.position.y = DOOR_H / 2;
+                doorGroup.add(doorGlass);
+
+                const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.1, 12), frameMat);
+                handle.position.set(0.08, DOOR_H / 2, 0.85);
+                doorGroup.add(handle);
+
+                doorGroup.position.set(f.mid.x, 0, f.mid.z);
+                doorGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), axis);
+                doorMesh = doorGlass;
+                chamberGroup.add(doorGroup);
+            }
+
+            /* ==================================================================
+               D. Six sloping "Roof Face" panels with "Roof axis" hip beams,
+                  rising from the eaves to the circular centre roof.
+                  The upper edge lands on a CIRCLE, not a polygon, because the
+                  cupola is round.
+               ================================================================== */
+            const roofBaseY = HEX_WALL_H;
+            const roofApexY = HEX_WALL_H + HEX_ROOF_H;
+            const vCupolaRing = getHexVertices(HEX_CUPOLA_R);
+
+            for (let k = 0; k < HEX_SIDES; k++) {
+                const pBase1 = vCorners[k];
+                const pBase2 = vCorners[(k + 1) % HEX_SIDES];
+                const pTop1 = vCupolaRing[k];
+                const pTop2 = vCupolaRing[(k + 1) % HEX_SIDES];
+
+                // "Roof axis" — the hip beam from each corner up to the cupola
+                const ribP1 = new THREE.Vector3(pBase1.x, roofBaseY, pBase1.z);
+                const ribP2 = new THREE.Vector3(pTop1.x, roofApexY, pTop1.z);
+                const ribDir = new THREE.Vector3().subVectors(ribP2, ribP1);
+                const rib = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.09, 0.09, ribDir.length(), 12), frameMat
+                );
+                rib.position.copy(new THREE.Vector3().addVectors(ribP1, ribP2).multiplyScalar(0.5));
+                rib.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), ribDir.clone().normalize());
+                chamberGroup.add(rib);
+
+                // Trapezoidal translucent green panel
+                const roofGeom = new THREE.BufferGeometry();
+                roofGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+                    pBase1.x, roofBaseY, pBase1.z,
+                    pBase2.x, roofBaseY, pBase2.z,
+                    pTop2.x, roofApexY, pTop2.z,
+
+                    pBase1.x, roofBaseY, pBase1.z,
+                    pTop2.x, roofApexY, pTop2.z,
+                    pTop1.x, roofApexY, pTop1.z
+                ]), 3));
+                roofGeom.computeVertexNormals();
+
+                const roofMesh = new THREE.Mesh(roofGeom, roofGlassMat);
+                roofMesh.castShadow = true;
+                chamberGroup.add(roofMesh);
+            }
+            /* ==================================================================
+               E. "Center roof" — Hexagonal exhaust cupola / turret matching CAD:
+                  Faceted white and lilac sheet-metal collar with 12 exhaust fans,
+                  internal structural cross-struts, rafter mounting brackets,
+                  and translucent purple hexagonal top lid.
+               ================================================================== */
+            const cupolaBaseY = roofApexY;
+            const cupolaTopY = cupolaBaseY + HEX_CUPOLA_H;
+
+            const cupolaWhiteMat = new THREE.MeshStandardMaterial({
+                color: 0xf8fafc, metalness: 0.35, roughness: 0.40, side: THREE.DoubleSide
+            });
+            const cupolaPurpleMat = new THREE.MeshStandardMaterial({
+                color: 0x8b34d8, metalness: 0.25, roughness: 0.38, side: THREE.DoubleSide
+            });
+            const steelMat = new THREE.MeshStandardMaterial({
+                color: 0x475569, metalness: 0.85, roughness: 0.25
+            });
+
+            // 1. Six vertical faceted walls of the hexagonal cupola collar
+            for (let k = 0; k < HEX_SIDES; k++) {
+                const f = getFace(vCupolaRing, k);
+                const axis = f.dir.clone().normalize();
+                // Facets 0 and 5 face front towards camera (+Z) — crisp white service panels per CAD;
+                // side/rear facets 1, 2, 3, 4 are lilac/purple per CAD assembly
+                const isFront = (k === 0 || k === 5);
+                const wallMat = isFront ? cupolaWhiteMat : cupolaPurpleMat;
+
+                // Vertical collar panel
+                const panel = new THREE.Mesh(new THREE.BoxGeometry(0.06, HEX_CUPOLA_H, f.width), wallMat);
+                panel.position.set(f.mid.x, cupolaBaseY + HEX_CUPOLA_H / 2, f.mid.z);
+                panel.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), axis);
+                panel.castShadow = true;
+                chamberGroup.add(panel);
+
+                // Top perimeter flange / lip bar along the top edge of each facet
+                const rimBar = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, f.width + 0.06), frameMat);
+                rimBar.position.set(f.mid.x + f.outward.x * 0.04, cupolaTopY + 0.04, f.mid.z + f.outward.z * 0.04);
+                rimBar.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), axis);
+                chamberGroup.add(rimBar);
+
+                // Base rim rail where cupola meets the green roof
+                const baseRail = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.06, f.width), frameMat);
+                baseRail.position.set(f.mid.x, cupolaBaseY + 0.03, f.mid.z);
+                baseRail.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), axis);
+                chamberGroup.add(baseRail);
+            }
+
+            // 2. Corner vertical joints & splice gussets between facets
+            for (let k = 0; k < HEX_SIDES; k++) {
+                const pt = vCupolaRing[k];
+                // Vertical corner trim / gusset
+                const cornerPost = new THREE.Mesh(new THREE.BoxGeometry(0.08, HEX_CUPOLA_H + 0.02, 0.08), frameMat);
+                cornerPost.position.set(pt.x, cupolaBaseY + HEX_CUPOLA_H / 2, pt.z);
+                chamberGroup.add(cornerPost);
+
+                // Rafter mounting socket bracket at each corner where the hip rafter arrives
+                const bracket = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.16, 0.12), steelMat);
+                bracket.position.set(pt.x, cupolaBaseY + 0.06, pt.z);
+                chamberGroup.add(bracket);
+            }
+
+            // 3. Hexagonal floor deck plate inside the cupola
+            const floorShape = new THREE.Shape();
+            for (let k = 0; k < HEX_SIDES; k++) {
+                const pt = vCupolaRing[k];
+                if (k === 0) floorShape.moveTo(pt.x, pt.z);
+                else floorShape.lineTo(pt.x, pt.z);
+            }
+            floorShape.closePath();
+            const floorGeo = new THREE.ExtrudeGeometry(floorShape, { depth: 0.06, bevelEnabled: false });
+            floorGeo.rotateX(-Math.PI / 2);
+            const floorMesh = new THREE.Mesh(floorGeo, cupolaPurpleMat);
+            floorMesh.position.y = cupolaBaseY;
+            chamberGroup.add(floorMesh);
+
+            // 4. Internal structural cross-struts (visible in CAD through lid)
+            const strutGeo = new THREE.CylinderGeometry(0.045, 0.045, HEX_CUPOLA_R * 1.732, 12);
+            strutGeo.rotateZ(Math.PI / 2);
+            [-0.7, 0.7].forEach(offsetZ => {
+                const strut = new THREE.Mesh(strutGeo, frameMat);
+                strut.position.set(0, cupolaBaseY + HEX_CUPOLA_H * 0.45, offsetZ);
+                chamberGroup.add(strut);
+            });
+
+            // 5. Translucent purple hexagonal lid capping the cupola
+            const lidRadius = HEX_CUPOLA_R + 0.12; // slight overhang rain lip
+            const vLid = getHexVertices(lidRadius);
+            const lidShape = new THREE.Shape();
+            for (let k = 0; k < HEX_SIDES; k++) {
+                const pt = vLid[k];
+                if (k === 0) lidShape.moveTo(pt.x, pt.z);
+                else lidShape.lineTo(pt.x, pt.z);
+            }
+            lidShape.closePath();
+
+            const lidGeo = new THREE.ExtrudeGeometry(lidShape, { depth: 0.10, bevelEnabled: true, bevelSize: 0.04, bevelThickness: 0.04 });
+            lidGeo.rotateX(-Math.PI / 2);
+            const lidMesh = new THREE.Mesh(lidGeo, cupolaGlassMat);
+            lidMesh.position.y = cupolaTopY + 0.08;
+            chamberGroup.add(lidMesh);
+
+            // Lid perimeter trim flange
+            for (let k = 0; k < HEX_SIDES; k++) {
+                const p1 = vLid[k];
+                const p2 = vLid[(k + 1) % HEX_SIDES];
+                const dir = new THREE.Vector3().subVectors(p2, p1);
+                const mid = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
+                const trim = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.10, dir.length() + 0.08), frameMat);
+                trim.position.set(mid.x, cupolaTopY + 0.15, mid.z);
+                trim.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir.clone().normalize());
+                chamberGroup.add(trim);
+            }
+
+            scene.add(chamberGroup);
+        }
+
+        /* ==========================================================================
+           Mechanical Iris Diaphragm — shared by the cupola ports and the wall units
+
+           Each blade is a SECTOR of the aperture disc: its pivot sits on the rim,
+           one edge runs to the centre, the next edge runs to the neighbouring
+           pivot, and the back follows the rim arc. Six such sectors tile the disc
+           exactly, so at open = 0 the aperture is genuinely covered. Rotating every
+           blade about its own rim pivot by IRIS_OPEN_ANGLE swings all the tips
+           outside the rim, clearing the aperture completely.
+
+           The earlier version used three narrow petals on the same rim circle;
+           three narrow petals can only ever cover a fraction of the disc, which is
+           why the shutters never looked closed and never fully opened.
+
+           Opening is a CONTRACTION, not just a swing. Rotating alone leaves the
+           blades sprawled across the aperture and jutting out past the rim, so the
+           fan stays half hidden. Because every blade's geometry is defined
+           outward from its own pivot on the rim, scaling the pivot group shrinks
+           the blade back towards that rim point — the aperture clears completely
+           and nothing protrudes. A small rotation on top of that keeps the
+           mechanical "twist" of a real diaphragm.
+           ========================================================================== */
+        const IRIS_BLADE_COUNT = 6;
+        const IRIS_OPEN_ANGLE = 0.55;   // radians of twist while opening
+        const IRIS_OPEN_SCALE = 0.10;   // blade size at fully open (1 = sealed)
+
+        function makeIrisBladeGeometry(radius) {
+            // Overshoot slightly past the centre so neighbours overlap instead of
+            // meeting on a hairline that shows daylight.
+            const k = 1.05;
+            const s = new THREE.Shape();
+            s.moveTo(0, 0);                                                    // pivot, on the rim
+            s.quadraticCurveTo(-radius * 0.55, -radius * 0.14, -radius * k, 0); // leading edge -> centre
+            s.lineTo(-radius * 0.5, radius * 0.86603);                          // -> next pivot
+            s.absarc(-radius, 0, radius, Math.PI / 3, 0, true);                 // rim arc -> back to pivot
+            s.closePath();
+            return new THREE.ExtrudeGeometry(s, { depth: 0.016, bevelEnabled: false });
+        }
+
+        /**
+         * Adds an iris to `parent` in its local XY plane, sealed shut.
+         * Returns the array of pivot groups for the animation loop.
+         */
+        function buildIrisDiaphragm(parent, { radius, z = 0, material, backing = false }) {
+            if (backing) {
+                // A dark disc behind the blades, so the port reads as a real opening
+                // when the iris is open and as shadow where blades overlap.
+                const disc = new THREE.Mesh(
+                    new THREE.CircleGeometry(radius * 0.99, 40),
+                    new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.25, roughness: 0.85 })
+                );
+                disc.position.z = z - 0.025;
+                parent.add(disc);
+            }
+
+            const geo = makeIrisBladeGeometry(radius);
+            const pivots = [];
+
+            for (let i = 0; i < IRIS_BLADE_COUNT; i++) {
+                const baseAngle = (i * Math.PI * 2) / IRIS_BLADE_COUNT;
+                const pivot = new THREE.Group();
+                pivot.position.set(
+                    Math.cos(baseAngle) * radius,
+                    Math.sin(baseAngle) * radius,
+                    // Stagger in z so overlapping blades never z-fight.
+                    z + i * 0.0035
+                );
+                pivot.rotation.z = baseAngle;          // sealed position
+                pivot.userData.baseAngle = baseAngle;  // read back by animate3D
+                pivot.add(new THREE.Mesh(geo, material));
+                parent.add(pivot);
+                pivots.push(pivot);
+            }
+            return pivots;
+        }
+
+        /* Drives a set of irises from a 0..1 open value.
+           0 = sealed (blades tile the aperture), 1 = fully clear (blades
+           contracted to slivers against the rim, fan completely exposed). */
+        function applyIrisOpen(irisSets, open) {
+            if (!irisSets) return;
+            const clamped = Math.max(0, Math.min(1, open));
+            const scale = 1 - clamped * (1 - IRIS_OPEN_SCALE);
+
+            irisSets.forEach((blades) => {
+                blades.forEach((pivot) => {
+                    pivot.rotation.z = pivot.userData.baseAngle + clamped * IRIS_OPEN_ANGLE;
+                    // Uniform scale about the rim pivot => the blade retracts
+                    // into the rim rather than sweeping across the opening.
+                    pivot.scale.setScalar(scale);
+                });
+            });
+        }
+
+        /* ==========================================================================
+           2. Twelve Exhaust Fans on the Hexagonal Centre-Roof Cupola (2 Per Facet)
+              Matches SolidWorks CAD ("Climate Control Chamber IV.EASM"):
+              The 6 hexagonal facets each carry 2 circular exhaust fan ports
+              side-by-side (6 facets x 2 fans = 12 fans), each behind an iris damper,
+              exhausting chamber air outwards.
+           ========================================================================== */
+        function buildTopCupolaFans() {
+            const vCupolaRing = getHexVertices(HEX_CUPOLA_R);
+            const cupolaCenterY = HEX_WALL_H + HEX_ROOF_H + (HEX_CUPOLA_H / 2);
+
+            const fanHousingMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8, roughness: 0.3 });
+            const bladeMat = new THREE.MeshStandardMaterial({ color: 0x2b3644, metalness: 0.5, roughness: 0.3 });
+            const irisBladeMat = new THREE.MeshStandardMaterial({ color: 0x8e99a6, metalness: 0.85, roughness: 0.25, side: THREE.DoubleSide });
+            const screwMat = new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.9, roughness: 0.2 });
+
+            topCupolaFans = [];
+            topCupolaIrisBlades = [];
+
+            for (let k = 0; k < HEX_SIDES; k++) {
+                const f = getFace(vCupolaRing, k);
+                const axis = f.dir.clone().normalize();
+                const normal = f.outward;
+
+                // 2 fans per facet, spaced symmetrically along the facet width
+                const fanOffsets = [-f.width * 0.25, f.width * 0.25];
+
+                fanOffsets.forEach((offset) => {
+                    const fanGroup = new THREE.Group();
+                    const pos = f.mid.clone().addScaledVector(axis, offset).setY(cupolaCenterY);
+                    pos.addScaledVector(normal, 0.035);
+                    fanGroup.position.copy(pos);
+                    fanGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
+
+                    // Square housing plate on the inside
+                    const plate = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.56, 0.04), fanHousingMat);
+                    plate.position.z = -0.02;
+                    fanGroup.add(plate);
+
+                    // Circular port bezel ring
+                    const bezel = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.025, 8, 22), fanHousingMat);
+                    fanGroup.add(bezel);
+
+                    // 4 Corner mounting screws/rivets around the fan port (CAD detail)
+                    const screwGeo = new THREE.CylinderGeometry(0.016, 0.016, 0.02, 8);
+                    screwGeo.rotateX(Math.PI / 2);
+                    [-0.23, 0.23].forEach(sx => {
+                        [-0.23, 0.23].forEach(sy => {
+                            const screw = new THREE.Mesh(screwGeo, screwMat);
+                            screw.position.set(sx, sy, 0.01);
+                            fanGroup.add(screw);
+                        });
+                    });
+
+                    // Spinning rotor, 4 aerodynamic blades
+                    const rotorGroup = new THREE.Group();
+                    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.06, 14), fanHousingMat);
+                    hub.rotateX(Math.PI / 2);
+                    rotorGroup.add(hub);
+
+                    for (let b = 0; b < 4; b++) {
+                        const blade = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.016, 0.065), bladeMat);
+                        blade.position.x = 0.11;
+                        blade.rotation.x = 0.35;
+                        const bladeRot = new THREE.Group();
+                        bladeRot.rotation.z = (b * Math.PI) / 2;
+                        bladeRot.add(blade);
+                        rotorGroup.add(bladeRot);
+                    }
+                    fanGroup.add(rotorGroup);
+                    topCupolaFans.push(rotorGroup);
+
+                    // Iris damper in front of the rotor, sealed until the fan runs
+                    topCupolaIrisBlades.push(buildIrisDiaphragm(fanGroup, {
+                        radius: 0.26,
+                        z: 0.045,
+                        material: irisBladeMat,
+                        backing: true
+                    }));
+
+                    fanGroup.userData = {
+                        kind: 'vent',
+                        label: 'מאוורר פליטה בגג המרכזי — מוציא אוויר מהתא כלפי חוץ + תריס צוּר'
+                    };
+
+                    scene.add(fanGroup);
+                });
+            }
+        }
+
+        /* ==========================================================================
+           3. Perimeter Modular Wall Units (Cooling Fan + Iris + Twin Heating Fans)
+           One per glass wall — five in total, matching the CAD's 5 "H&V assembly"
+           instances. The door face has none.
+           Matches SolidWorks CAD layout:
+             - Rectangular white box hangs below the rail
+             - Front face has a rectangular opening showing the EBM Papst cooling fan
+             - Outside face (towards wall) has the iris/damper mechanism + circular hole in wall
+             - On TOP of the box, a flat shelf plate carries two small dark heating fans side-by-side
+             - Heating element is between the twin fans and the main cooling fan
+           ========================================================================== */
+        function buildModularWallFanUnits() {
+            const vCorners = getHexVertices(HEX_R);
+            wallCoolingFans = [];
+            wallTwinHeatingFans = [];
+            wallIrisBlades = [];
+            heatingElements = [];
+
+            // Housing dimensions. +Z local points INTO the chamber.
+            const boxW = 1.45;   // along the wall
+            const boxH = 1.55;   // vertical
+            const boxD = 0.62;   // through-wall depth
+            const RAIL_Y = 4.05; // the mid-lower rail the unit hangs from
+
+            WALL_FACES.forEach((facetIdx) => {
+                const f = getFace(vCorners, facetIdx);
+                const inward = f.inward;
+
+                const unitGroup = new THREE.Group();
+                /* Mounted on the INSIDE face of the wall, hanging below the rail.
+                   The box's back panel sits flush against the wall, so the whole
+                   assembly is pushed in by half its depth. */
+                unitGroup.position.set(
+                    f.mid.x + inward.x * (boxD / 2),
+                    RAIL_Y - 0.30,
+                    f.mid.z + inward.z * (boxD / 2)
+                );
+                unitGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), inward);
+
+                const boxMat = new THREE.MeshStandardMaterial({ color: 0xf4f6f9, metalness: 0.22, roughness: 0.42 });
+                const steelMat = new THREE.MeshStandardMaterial({ color: 0x9aa6b4, metalness: 0.85, roughness: 0.25 });
+                const blackMat = new THREE.MeshStandardMaterial({ color: 0x1b2430, metalness: 0.65, roughness: 0.35 });
+                const recessMat = new THREE.MeshStandardMaterial({ color: 0x141c26, metalness: 0.4, roughness: 0.6 });
+
+                /* =============================================================
+                   A. INTAKE HOUSING — the white sheet-metal box.
+                      Open towards the chamber (the fan is visible through a
+                      rectangular aperture); closed towards the wall, where it
+                      meets the circular through-wall port.
+                   ============================================================= */
+                const wallSide = -boxD / 2;
+                const roomSide = boxD / 2;
+
+                // Back panel with circular intake hole matching the through-wall port
+                const backShape = new THREE.Shape();
+                backShape.moveTo(-boxW / 2, -boxH / 2);
+                backShape.lineTo(boxW / 2, -boxH / 2);
+                backShape.lineTo(boxW / 2, boxH / 2);
+                backShape.lineTo(-boxW / 2, boxH / 2);
+                backShape.closePath();
+
+                const intakeHole = new THREE.Path();
+                intakeHole.absarc(0, 0, 0.48, 0, Math.PI * 2, true);
+                backShape.holes.push(intakeHole);
+
+                const backGeo = new THREE.ExtrudeGeometry(backShape, { depth: 0.03, bevelEnabled: false });
+                const backPanel = new THREE.Mesh(backGeo, boxMat);
+                backPanel.position.set(0, 0, wallSide);
+                backPanel.castShadow = true;
+                unitGroup.add(backPanel);
+
+                // Sides, top and bottom.
+                [-1, 1].forEach((sx) => {
+                    const side = new THREE.Mesh(new THREE.BoxGeometry(0.03, boxH, boxD), boxMat);
+                    side.position.set(sx * (boxW / 2 - 0.015), 0, 0);
+                    unitGroup.add(side);
+                });
+                [-1, 1].forEach((sy) => {
+                    const cap = new THREE.Mesh(new THREE.BoxGeometry(boxW, 0.03, boxD), boxMat);
+                    cap.position.set(0, sy * (boxH / 2 - 0.015), 0);
+                    cap.castShadow = true;
+                    unitGroup.add(cap);
+                });
+
+                // Front bezel: a frame leaving a rectangular aperture for the fan.
+                const apW = boxW - 0.34, apH = boxH - 0.40;
+                [[0, (boxH - apH) / 4 + apH / 2, boxW, (boxH - apH) / 2],
+                 [0, -((boxH - apH) / 4 + apH / 2), boxW, (boxH - apH) / 2],
+                 [-(apW / 2 + (boxW - apW) / 4), 0, (boxW - apW) / 2, apH],
+                 [(apW / 2 + (boxW - apW) / 4), 0, (boxW - apW) / 2, apH]
+                ].forEach(([x, y, w, h]) => {
+                    const strip = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.03), boxMat);
+                    strip.position.set(x, y, roomSide - 0.015);
+                    unitGroup.add(strip);
+                });
+
+                // Dark recess behind the aperture so the fan reads against shadow.
+                const recess = new THREE.Mesh(new THREE.PlaneGeometry(apW, apH), recessMat);
+                /* Deep inside the housing, BEHIND the rotor. It was previously
+                   only 0.06 back, which put it in front of the blades and hid
+                   the fan completely. */
+                recess.position.set(0, 0, roomSide - 0.34);
+                unitGroup.add(recess);
+
+                // Corner fixings on the bezel.
+                const screwGeo = new THREE.CylinderGeometry(0.032, 0.032, 0.025, 10);
+                [[-1, -1], [-1, 1], [1, -1], [1, 1]].forEach(([sx, sy]) => {
+                    const s = new THREE.Mesh(screwGeo, steelMat);
+                    s.rotation.x = Math.PI / 2;
+                    s.position.set(sx * (boxW / 2 - 0.08), sy * (boxH / 2 - 0.08), roomSide);
+                    unitGroup.add(s);
+                });
+
+                /* =============================================================
+                   B. INTAKE FAN — draws OUTSIDE air through the wall port into
+                      the chamber. Faces the chamber interior, mounted in the
+                      aperture, with a wire guard like the CAD part.
+                   ============================================================= */
+                const fanGroup = new THREE.Group();
+                fanGroup.position.set(0, 0, roomSide - 0.17);
+
+                // Square mounting frame of the 120 mm axial fan, just behind
+                // the rotor so the blades read against it.
+                const frame = new THREE.Mesh(new THREE.BoxGeometry(0.98, 0.98, 0.05), blackMat);
+                frame.position.z = -0.055;
+                fanGroup.add(frame);
+
+                const rotorGroup = new THREE.Group();
+                const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.10, 18), blackMat);
+                hub.rotateX(Math.PI / 2);
+                rotorGroup.add(hub);
+
+                // Five swept blades, as on the CAD rotor.
+                const bladeShape = new THREE.Shape();
+                bladeShape.moveTo(0.14, -0.09);
+                bladeShape.quadraticCurveTo(0.34, -0.16, 0.44, 0.02);
+                bladeShape.quadraticCurveTo(0.30, 0.14, 0.14, 0.10);
+                bladeShape.closePath();
+                const bladeGeo = new THREE.ExtrudeGeometry(bladeShape, { depth: 0.014, bevelEnabled: false });
+                const bladeMat = new THREE.MeshStandardMaterial({ color: 0x2b3644, metalness: 0.5, roughness: 0.35, side: THREE.DoubleSide });
+
+                for (let b = 0; b < 5; b++) {
+                    const holder = new THREE.Group();
+                    holder.rotation.z = (b * Math.PI * 2) / 5;
+                    const blade = new THREE.Mesh(bladeGeo, bladeMat);
+                    blade.rotation.x = 0.32;
+                    holder.add(blade);
+                    rotorGroup.add(holder);
+                }
+                fanGroup.add(rotorGroup);
+                wallCoolingFans.push(rotorGroup);
+
+                // Wire finger guard.
+                const guard = new THREE.Group();
+                [0.16, 0.28, 0.40].forEach((r) => {
+                    guard.add(new THREE.Mesh(new THREE.TorusGeometry(r, 0.008, 6, 26), steelMat));
+                });
+                for (let s = 0; s < 4; s++) {
+                    const spoke = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.007, 0.82, 6), steelMat);
+                    spoke.rotation.z = (s * Math.PI) / 4;
+                    guard.add(spoke);
+                }
+                guard.position.z = 0.115;   // in front of the rotor, at the bezel
+                fanGroup.add(guard);
+
+                fanGroup.userData = {
+                    kind: 'vent',
+                    label: 'מאוורר שאיבה — מכניס אוויר מבחוץ אל תוך התא (דרך תריס הצוּר בדופן)'
+                };
+                unitGroup.add(fanGroup);
+
+                /* =============================================================
+                   C. THROUGH-WALL PORT + IRIS DAMPER + EXPOSED INTAKE FAN ROTOR
+                      Facing outside towards the exterior wall.
+                      Behind the iris damper is a cylindrical throat with a
+                      spinning intake rotor, fully exposed and visible from
+                      the outside when the shutter opens (matching the top fans).
+                   ============================================================= */
+                const irisMat = new THREE.MeshStandardMaterial({ color: 0x8e99a6, metalness: 0.85, roughness: 0.25, side: THREE.DoubleSide });
+                const tunnelMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.3, roughness: 0.8, side: THREE.DoubleSide });
+
+                const outsidePortGroup = new THREE.Group();
+                outsidePortGroup.position.set(0, 0, wallSide - 0.02);
+                outsidePortGroup.userData = {
+                    kind: 'vent',
+                    label: 'מאוורר שאיבה תחתון + תריס צוּר — לחץ להפעלה/כיבוי'
+                };
+
+                // 1. Cylindrical intake throat / tunnel running through the wall
+                const tunnelGeo = new THREE.CylinderGeometry(0.48, 0.48, 0.20, 32, 1, true);
+                tunnelGeo.rotateX(Math.PI / 2);
+                const tunnel = new THREE.Mesh(tunnelGeo, tunnelMat);
+                tunnel.position.z = 0.09;
+                outsidePortGroup.add(tunnel);
+
+                // Dark backing cavity inside the intake tunnel
+                const backDisc = new THREE.Mesh(new THREE.CircleGeometry(0.47, 32), tunnelMat);
+                backDisc.position.z = 0.19;
+                outsidePortGroup.add(backDisc);
+
+                // 2. Spinning Intake Fan Rotor (visible from outside when iris shutter opens)
+                const outsideRotorGroup = new THREE.Group();
+                outsideRotorGroup.position.set(0, 0, 0.06);
+
+                const outsideHub = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.08, 18), blackMat);
+                outsideHub.rotateX(Math.PI / 2);
+                outsideRotorGroup.add(outsideHub);
+
+                for (let b = 0; b < 5; b++) {
+                    const holder = new THREE.Group();
+                    holder.rotation.z = (b * Math.PI * 2) / 5;
+                    const blade = new THREE.Mesh(bladeGeo, bladeMat);
+                    blade.rotation.x = -0.32;
+                    holder.add(blade);
+                    outsideRotorGroup.add(holder);
+                }
+                outsidePortGroup.add(outsideRotorGroup);
+                wallCoolingFans.push(outsideRotorGroup);
+
+                // 3. Port flange ring on the outer wall surface
+                const flange = new THREE.Mesh(new THREE.TorusGeometry(0.50, 0.035, 10, 32), steelMat);
+                flange.userData = { kind: 'vent', label: 'מאוורר שאיבה תחתון + תריס צוּר — לחץ להפעלה/כיבוי' };
+                outsidePortGroup.add(flange);
+
+                // Toothed adjuster ring as visible in CAD
+                const gearRing = new THREE.Mesh(
+                    new THREE.TorusGeometry(0.55, 0.022, 6, 34, Math.PI * 1.15), steelMat
+                );
+                gearRing.rotation.z = -Math.PI * 0.15;
+                gearRing.userData = { kind: 'vent', label: 'מאוורר שאיבה תחתון + תריס צוּר — לחץ להפעלה/כיבוי' };
+                outsidePortGroup.add(gearRing);
+
+                // 4. Mechanical iris damper in front of the rotor
+                const portIrisPivotGroup = new THREE.Group();
+                portIrisPivotGroup.position.set(0, 0, -0.015);
+                outsidePortGroup.add(portIrisPivotGroup);
+
+                wallIrisBlades.push(buildIrisDiaphragm(portIrisPivotGroup, {
+                    radius: 0.48,
+                    z: 0,
+                    material: irisMat,
+                    backing: false
+                }));
+
+                // 5. Clickable hit target on the outer face of the wall
+                const outsideHit = new THREE.Mesh(
+                    new THREE.CircleGeometry(0.58, 24),
+                    new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide })
+                );
+                outsideHit.position.set(0, 0, -0.03);
+                outsideHit.userData = {
+                    kind: 'vent',
+                    label: 'מאוורר שאיבה תחתון + תריס צוּר — לחץ להפעלה/כיבוי'
+                };
+                outsidePortGroup.add(outsideHit);
+
+                unitGroup.add(outsidePortGroup);
+
+                /* =============================================================
+                   D. HEATER DECK — sits flat on TOP of the housing.
+                      Per the CAD photographs the two small fans lie HORIZONTAL,
+                      blowing upward through the deck, and they recirculate air
+                      already inside the chamber across the heater rods. They do
+                      not touch the outside-air path at all.
+                   ============================================================= */
+                const deckGroup = new THREE.Group();
+                deckGroup.position.set(0, boxH / 2 + 0.045, 0.02);
+
+                // Deck plate, slightly larger than the housing footprint.
+                const deck = new THREE.Mesh(new THREE.BoxGeometry(boxW + 0.10, 0.05, boxD + 0.06), boxMat);
+                deck.castShadow = true;
+                deckGroup.add(deck);
+
+                // Two 60 mm fans side by side, axes VERTICAL (facing up).
+                const twinRotors = [];
+                [-0.30, 0.14].forEach((offsetX) => {
+                    const smallFan = new THREE.Group();
+                    smallFan.position.set(offsetX, 0.055, -0.04);
+
+                    // Square housing lying flat on the deck.
+                    const housing = new THREE.Mesh(new THREE.BoxGeometry(0.40, 0.06, 0.40), blackMat);
+                    smallFan.add(housing);
+
+                    // Circular throat through the housing.
+                    const throat = new THREE.Mesh(
+                        new THREE.CylinderGeometry(0.16, 0.16, 0.075, 22, 1, true),
+                        new THREE.MeshStandardMaterial({ color: 0x0f151d, metalness: 0.4, roughness: 0.6, side: THREE.DoubleSide })
+                    );
+                    smallFan.add(throat);
+
+                    // Rotor spins about the VERTICAL axis, so blades lie flat.
+                    const rotor = new THREE.Group();
+                    const smallHub = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.05, 14), steelMat);
+                    rotor.add(smallHub);
+                    for (let b = 0; b < 7; b++) {
+                        const blade = new THREE.Mesh(new THREE.BoxGeometry(0.115, 0.012, 0.05), bladeMat);
+                        blade.position.x = 0.10;
+                        blade.rotation.z = 0.36;
+                        const holder = new THREE.Group();
+                        holder.rotation.y = (b * Math.PI * 2) / 7;
+                        holder.add(blade);
+                        rotor.add(holder);
+                    }
+                    rotor.position.y = 0.012;
+                    smallFan.add(rotor);
+                    twinRotors.push(rotor);
+
+                    // Guard rings on top of the throat.
+                    [0.07, 0.12].forEach((r) => {
+                        const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.006, 6, 20), steelMat);
+                        ring.rotation.x = Math.PI / 2;
+                        ring.position.y = 0.042;
+                        smallFan.add(ring);
+                    });
+
+                    deckGroup.add(smallFan);
+                });
+                wallTwinHeatingFans.push(twinRotors);
+
+                // Cable gland on the deck, as in the CAD close-up.
+                const gland = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.04, 14), boxMat);
+                gland.position.set(0.42, 0.045, 0.10);
+                deckGroup.add(gland);
+
+                /* Four heater rods in the plenum directly beneath the deck fans:
+                   chamber air is pulled down across them and returned warmed. */
+                const rodGeo = new THREE.CylinderGeometry(0.030, 0.030, 0.95, 14);
+                rodGeo.rotateZ(Math.PI / 2);
+
+                // One PointLight per unit, not per rod: 4 rods x 5 units would be
+                // 20 dynamic lights and blow the shader's uniform budget.
+                const heaterLight = new THREE.PointLight(0xff4a10, 0, 6.0);
+                heaterLight.position.set(-0.08, -0.10, 0.0);
+                deckGroup.add(heaterLight);
+
+                [-0.20, -0.07, 0.06, 0.19].forEach((offsetZ) => {
+                    const rod = new THREE.Mesh(rodGeo, new THREE.MeshStandardMaterial({
+                        color: 0x707d8c,
+                        metalness: 0.55,
+                        roughness: 0.18,
+                        emissive: 0x000000,
+                        emissiveIntensity: 0
+                    }));
+                    rod.position.set(-0.08, -0.085, offsetZ);
+                    deckGroup.add(rod);
+                    heatingElements.push({ mesh: rod, light: heaterLight });
+                });
+
+                // End brackets holding the rod bank.
+                [-0.60, 0.44].forEach((x) => {
+                    const bracket = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.16, boxD - 0.04), steelMat);
+                    bracket.position.set(x, -0.075, 0);
+                    deckGroup.add(bracket);
+                });
+
+                deckGroup.userData = {
+                    kind: 'heat',
+                    label: 'סוללת חימום — שני מאווררים אופקיים מסחררים אוויר מתוך התא על פני גופי החימום'
+                };
+                unitGroup.add(deckGroup);
+
+                unitGroup.userData = {
+                    kind: 'modular_unit',
+                    label: 'יחידת אקלים: שאיבת אוויר חיצוני + תריס צוּר, וסוללת חימום פנימית'
+                };
+
+                scene.add(unitGroup);
+            });
+        }
+
+        /* ==========================================================================
+           4. Internal & External Sensors (S1-S5 & S0)
+           ========================================================================== */
+        function makeTextSprite(text, opts) {
+            opts = opts || {};
+            const canvas = document.createElement('canvas');
+            canvas.width = 256; canvas.height = 96;
+            const ctx = canvas.getContext('2d');
+            const bg = opts.bg || 'rgba(255,255,255,0.92)';
+            const fg = opts.fg || '#0f766e';
+            const border = opts.border || '#99f6e4';
+            const r = 18;
+            ctx.fillStyle = border;
+            ctx.beginPath();
+            ctx.roundRect(6, 8, 244, 80, r);
+            ctx.fill();
+            ctx.fillStyle = bg;
+            ctx.beginPath();
+            ctx.roundRect(8, 10, 240, 76, r - 2);
+            ctx.fill();
+            ctx.fillStyle = fg;
+            ctx.font = '700 34px Heebo, Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, 128, 48);
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.needsUpdate = true;
+            const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
+            const sprite = new THREE.Sprite(mat);
+            sprite.scale.set(opts.sx || 1.6, opts.sy || 0.6, 1);
+            return sprite;
+        }
+
+        function buildInternalSensors3D() {
+            // S1..S5 sensor probes removed from 3D chamber to match clean CAD model
+
+            // Top exhaust fan offline alert marker on Cupola
+            const fanAlertSprite = makeTextSprite('⚠️ תקלת מאוורר (Offline)', { bg: '#fee2e2', fg: '#b91c1c', border: '#ef4444', sx: 2.8, sy: 0.7 });
+            fanAlertSprite.position.set(0, HEX_WALL_H + HEX_ROOF_H + 2.4, 0);
+            fanAlertSprite.visible = false;
+            scene.add(fanAlertSprite);
+            offlineMarkers['topfan'] = fanAlertSprite;
+        }
+
+        function updateOfflineMarkers3D() {
+            if (offlineMarkers['s2']) offlineMarkers['s2'].visible = state.faults.s2;
+            if (offlineMarkers['topfan']) offlineMarkers['topfan'].visible = state.faults.topfan;
+            if (offlineMarkers['s0']) offlineMarkers['s0'].visible = state.faults.s0;
+
+            const anyFault = state.faults.s2 || state.faults.topfan || state.faults.s0;
+            const piStatus = document.getElementById('header-pi-status');
+            if (piStatus) {
+                if (anyFault) {
+                    piStatus.className = "text-amber-700 font-bold";
+                    piStatus.innerText = "התרעת רכיב מנותק!";
+                } else {
+                    piStatus.className = "text-emerald-700 font-bold";
+                    piStatus.innerText = "מקושר (Online)";
+                }
+            }
+        }
+
+        /* ==========================================================================
+           5. Ground Plane (Grass), Shadows & Ambient Weather Station
+           ========================================================================== */
+        function buildGroundAndExternal() {
+            const fieldGeo = new THREE.PlaneGeometry(160, 160);
+            const fieldMat = new THREE.MeshStandardMaterial({ color: 0x7fb069, roughness: 0.92, metalness: 0.0 });
+            const field = new THREE.Mesh(fieldGeo, fieldMat);
+            field.rotation.x = -Math.PI / 2;
+            field.position.y = -0.52;
+            field.receiveShadow = true;
+            scene.add(field);
+
+            const loader = new THREE.TextureLoader();
+            loader.load(
+                'https://threejs.org/examples/textures/terrain/grasslight-big.jpg',
+                function(tex) {
+                    if (THREE.sRGBEncoding) tex.encoding = THREE.sRGBEncoding;
+                    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+                    tex.repeat.set(14, 14);
+                    tex.anisotropy = 4;
+                    fieldMat.map = tex;
+                    fieldMat.color.setHex(0xffffff);
+                    fieldMat.needsUpdate = true;
+                },
+                undefined,
+                function() {
+                    const c = document.createElement('canvas'); c.width = 512; c.height = 512;
+                    const g = c.getContext('2d');
+                    g.fillStyle = '#7fb069'; g.fillRect(0, 0, 512, 512);
+                    for (let i = 0; i < 6000; i++) {
+                        const x = Math.random() * 512, y = Math.random() * 512, r = Math.random() * 2.5 + 0.6;
+                        g.fillStyle = Math.random() < 0.5 ? 'rgba(58,92,32,0.45)' : 'rgba(170,200,115,0.5)';
+                        g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+                    }
+                    const ft = new THREE.CanvasTexture(c);
+                    if (THREE.sRGBEncoding) ft.encoding = THREE.sRGBEncoding;
+                    ft.wrapS = ft.wrapT = THREE.RepeatWrapping; ft.repeat.set(4, 4);
+                    fieldMat.map = ft; fieldMat.needsUpdate = true;
+                }
+            );
+
+            // Contact Shadow under Hexagonal Base
+            const shadowGeo = new THREE.PlaneGeometry(35, 35);
+            const shadowMat = new THREE.ShadowMaterial({ opacity: 0.24 });
+            const shadowPlane = new THREE.Mesh(shadowGeo, shadowMat);
+            shadowPlane.rotation.x = -Math.PI / 2;
+            shadowPlane.position.y = -0.50;
+            shadowPlane.receiveShadow = true;
+            scene.add(shadowPlane);
+
+            // Ambient Sensor Station (S0) Outside on Grass
+            const s0Group = new THREE.Group();
+            s0Group.position.set(8.5, 0, 0);
+
+            const s0Post = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 6.0, 16), new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.8 }));
+            s0Post.position.y = 2.5;
+            s0Group.add(s0Post);
+
+            const s0Box = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.7, 0.45), new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.2, roughness: 0.5 }));
+            s0Box.position.y = 5.5;
+            s0Group.add(s0Box);
+
+            const extSprite = makeTextSprite('חיישן חוץ  S0', { bg: 'rgba(255,251,235,0.96)', fg: '#92400e', border: '#fde68a', sx: 2.4, sy: 0.65 });
+            extSprite.position.set(0, 6.6, 0);
+            s0Group.add(extSprite);
+
+            const extAlertSprite = makeTextSprite('⚠️ אין תקשורת (Offline)', { bg: '#fee2e2', fg: '#b91c1c', border: '#ef4444', sx: 2.6, sy: 0.7 });
+            extAlertSprite.position.set(0, 7.4, 0);
+            extAlertSprite.visible = false;
+            s0Group.add(extAlertSprite);
+            offlineMarkers['s0'] = extAlertSprite;
+
+            scene.add(s0Group);
+        }
+
+        /* ==========================================================================
+           6. Airflow Particles (Dynamic Cooling Stream / Warm Heating Circulation)
+           ========================================================================== */
+        /* A soft radial sprite. Flat square points read as hard specks; a
+           feathered dot reads as air, and is what makes the hot stream look
+           like heat rather than yellow confetti. */
+        function makeParticleSprite() {
+            const c = document.createElement('canvas');
+            c.width = c.height = 64;
+            const g = c.getContext('2d');
+            const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+            grad.addColorStop(0.0, 'rgba(255,255,255,1)');
+            grad.addColorStop(0.35, 'rgba(255,255,255,0.65)');
+            grad.addColorStop(1.0, 'rgba(255,255,255,0)');
+            g.fillStyle = grad;
+            g.fillRect(0, 0, 64, 64);
+            return new THREE.CanvasTexture(c);
+        }
+
+        function buildAirflowParticles() {
+            const particleCount = 460;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+
+            for (let i = 0; i < particleCount; i++) {
+                positions[i * 3] = (Math.random() - 0.5) * 8.5;
+                positions[i * 3 + 1] = Math.random() * (HEX_WALL_H + HEX_ROOF_H);
+                positions[i * 3 + 2] = (Math.random() - 0.5) * 8.5;
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+            const material = new THREE.PointsMaterial({
+                color: AIRFLOW_LOOKS.cool.color,
+                size: AIRFLOW_LOOKS.cool.size,
+                map: makeParticleSprite(),
+                transparent: true,
+                opacity: 0,
+                depthWrite: false,
+                blending: THREE.NormalBlending
+            });
+
+            airflowParticles = new THREE.Points(geometry, material);
+            scene.add(airflowParticles);
+        }
+
+        /* Airflow appearance, tuned by measuring warm-pixel coverage of the
+           rendered frame rather than by eye.
+
+           NOTE ON BLENDING: additive blending was tried first and is a trap
+           here. The scene has a bright sky and sunlit grass, so adding light
+           pushes pixels towards white instead of orange — measured warm
+           coverage was 0.02%, i.e. invisible. Plain alpha blending with a
+           saturated red-orange measures 4.3%, over 200x better. `size` is in
+           world units, so it also had to grow substantially to register. */
+        const AIRFLOW_LOOKS = {
+            heat: { color: 0xd92b06, size: 1.20 },
+            cool: { color: 0x0e7fd4, size: 0.70 }
+        };
+
+        let airflowLook = null;
+        let airflowTime = 0;   // drives the lateral shimmer of the warm stream
+
+        function setAirflowLook(look) {
+            if (airflowLook === look || !airflowParticles) return;
+            airflowLook = look;
+            const cfg = AIRFLOW_LOOKS[look] || AIRFLOW_LOOKS.cool;
+            const m = airflowParticles.material;
+            m.color.setHex(cfg.color);
+            m.size = cfg.size;
+            m.blending = THREE.NormalBlending;
+            m.needsUpdate = true;
+        }
+
+        /* ==========================================================================
+           7. Animation Loop (Smooth Fan Spin, Iris Diaphragm, Heater Glow & Airflow)
+           ========================================================================== */
+        function animate3D() {
+            requestAnimationFrame(animate3D);
+
+            const lerpSpeed = 0.06;
+
+            state.fanTopSpeed += (state.targetFanTop - state.fanTopSpeed) * lerpSpeed;
+            state.fanBottomSpeed += (state.targetFanBottom - state.fanBottomSpeed) * lerpSpeed;
+            state.shutterTopOpen += (state.targetShutterTop - state.shutterTopOpen) * lerpSpeed;
+            state.shutterBottomOpen += (state.targetShutterBottom - state.shutterBottomOpen) * lerpSpeed;
+            state.heaterIntensity += (state.targetHeater - state.heaterIntensity) * lerpSpeed;
+
+            // 1. Rotate Top Exhaust Fans on Cupola
+            if (topCupolaFans && topCupolaFans.length > 0) {
+                topCupolaFans.forEach(rotor => {
+                    rotor.rotation.z += state.fanTopSpeed * 0.45;
+                });
+            }
+
+            // 2. Rotate Lower Cooling Fans in Perimeter Units
+            if (wallCoolingFans && wallCoolingFans.length > 0) {
+                wallCoolingFans.forEach(rotor => {
+                    rotor.rotation.z += state.fanBottomSpeed * 0.45;
+                });
+            }
+
+            // 3. Rotate Twin Small Heating Fans on Top of Units
+            if (wallTwinHeatingFans && wallTwinHeatingFans.length > 0) {
+                wallTwinHeatingFans.forEach(twinPair => {
+                    twinPair.forEach(rotor => {
+                        rotor.rotation.y += state.heaterIntensity * 0.55;
+                    });
+                });
+            }
+
+            // 4. Mechanical iris diaphragms: 0 = sealed, 1 = fully clear
+            applyIrisOpen(wallIrisBlades, state.shutterBottomOpen);
+            applyIrisOpen(topCupolaIrisBlades, state.shutterTopOpen);
+
+            // 5. Update Glowing Quartz Heating Elements & Warm Light
+            if (heatingElements && heatingElements.length > 0) {
+                heatingElements.forEach(h => {
+                    // Hotter hue and stronger output than before: at full duty the
+                    // rods should clearly read as glowing, not tinted.
+                    h.mesh.material.emissive.setHex(0xff4a10);
+                    h.mesh.material.emissiveIntensity = state.heaterIntensity * 3.4;
+                    h.light.intensity = state.heaterIntensity * 3.0;
+                });
+            }
+
+            // 6. Dynamic Airflow: warm circulation vs cool exhaust
+            if (airflowParticles) {
+                const positions = airflowParticles.geometry.attributes.position.array;
+                const count = positions.length / 3;
+                const isVenting = state.fanTopSpeed > 0.08 || state.fanBottomSpeed > 0.08;
+                const isHeating = state.heaterIntensity > 0.08;
+                airflowTime += 0.016;
+
+                if (isHeating) {
+                    setAirflowLook('heat');
+                    airflowParticles.material.opacity = 0.35 + state.heaterIntensity * 0.6;
+
+                    /* Heating is a CLOSED LOOP inside the chamber: the deck fans
+                       pull chamber air across the heater rods and return it warm,
+                       so it rises from deck height and recirculates. Nothing
+                       enters or leaves — earlier this fell from the roof, which
+                       implied roof-mounted heaters that do not exist. */
+                    for (let i = 0; i < count; i++) {
+                        positions[i * 3 + 1] += 0.05 * state.heaterIntensity;
+                        positions[i * 3] += Math.sin(airflowTime * 1.6 + i * 0.7) * 0.014;
+                        positions[i * 3 + 2] += Math.cos(airflowTime * 1.4 + i * 0.5) * 0.014;
+                        // Back down to the heater decks once it reaches the eaves.
+                        if (positions[i * 3 + 1] > HEX_WALL_H - 0.6) positions[i * 3 + 1] = 3.1;
+                    }
+                    airflowParticles.geometry.attributes.position.needsUpdate = true;
+                } else if (isVenting) {
+                    setAirflowLook('cool');
+                    airflowParticles.material.opacity = state.fanTopSpeed * 0.8;
+
+                    /* Ventilation is a THROUGH-FLOW: the wall fans draw outside
+                       air in at deck height and the roof cupola exhausts it, so
+                       the stream climbs and restarts at the intakes. */
+                    for (let i = 0; i < count; i++) {
+                        positions[i * 3 + 1] += 0.16 * state.fanTopSpeed;
+                        if (positions[i * 3 + 1] > HEX_WALL_H + HEX_ROOF_H + 1.5) positions[i * 3 + 1] = 3.4;
+                    }
+                    airflowParticles.geometry.attributes.position.needsUpdate = true;
+                } else {
+                    airflowParticles.material.opacity = 0;
+                }
+            }
+
+            // Update UI Badges & HUD Telemetry
+            updateUIBadges();
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        /* ==========================================================================
+           8. Telemetry HUD & Status Badges
+           ========================================================================== */
+        function updateUIBadges() {
+            // Cupola Top Exhaust Fans & Damper UI
+            const badgeTop = document.getElementById('badge-fan-top');
+            const shutterTopTxt = document.getElementById('badge-shutter-top');
+            const irisTop = document.getElementById('iris-top');
+
+            if (state.fanTopSpeed > 0.08) {
+                badgeTop.className = "px-2.5 py-1 rounded text-[11px] font-bold bg-sky-100 text-sky-800 border border-sky-300 glow-ventilation";
+                badgeTop.innerText = `פעיל (${Math.round(state.fanTopSpeed * 100)}%)`;
+                shutterTopTxt.innerText = `תריסי צוּר: פתוחים (${Math.round(state.shutterTopOpen * 100)}%)`;
+                if (irisTop && !irisTop.classList.contains('active')) irisTop.classList.add('active');
+            } else {
+                badgeTop.className = "px-2.5 py-1 rounded text-[11px] font-bold bg-slate-200 text-slate-600";
+                badgeTop.innerText = "כבוי";
+                shutterTopTxt.innerText = "תריסי צוּר: סגורים (0%)";
+                if (irisTop) irisTop.classList.remove('active');
+            }
+
+            // Perimeter Wall Cooling Fans & Dampers
+            const badgeBottom = document.getElementById('badge-fan-bottom');
+            const shutterBottomTxt = document.getElementById('badge-shutter-bottom');
+            const irisBottom = document.getElementById('iris-bottom');
+
+            if (state.fanBottomSpeed > 0.08) {
+                badgeBottom.className = "px-2.5 py-1 rounded text-[11px] font-bold bg-sky-100 text-sky-800 border border-sky-300";
+                badgeBottom.innerText = `פעיל (${Math.round(state.fanBottomSpeed * 100)}%)`;
+                shutterBottomTxt.innerText = `תריסי צוּר: פתוחים (${Math.round(state.shutterBottomOpen * 100)}%)`;
+                if (irisBottom && !irisBottom.classList.contains('active')) irisBottom.classList.add('active');
+            } else {
+                badgeBottom.className = "px-2.5 py-1 rounded text-[11px] font-bold bg-slate-200 text-slate-600";
+                badgeBottom.innerText = "כבוי";
+                shutterBottomTxt.innerText = "תריסי צוּר: סגורים (0%)";
+                if (irisBottom) irisBottom.classList.remove('active');
+            }
+
+            // Twin Heating Fans & Elements UI
+            const badgeHeater = document.getElementById('badge-heater');
+            const iconHeater = document.getElementById('status-icon-heater');
+
+            if (state.heaterIntensity > 0.05) {
+                badgeHeater.className = "px-2.5 py-1 rounded text-[11px] font-bold bg-orange-100 text-orange-800 border border-orange-300 glow-heating";
+                badgeHeater.innerText = `מחמם (${Math.round(state.heaterIntensity * 100)}%)`;
+                if (iconHeater) iconHeater.className = "w-9 h-9 rounded-lg bg-orange-100 flex items-center justify-center text-orange-600";
+            } else {
+                badgeHeater.className = "px-2.5 py-1 rounded text-[11px] font-bold bg-slate-200 text-slate-600";
+                badgeHeater.innerText = "כבוי (0%)";
+                if (iconHeater) iconHeater.className = "w-9 h-9 rounded-lg bg-slate-200 flex items-center justify-center text-slate-500";
+            }
+
+        }
+
+        /* Helpers & View Triggers */
+        function toggleDoorGlass() {
+            state.doorTransparent = !state.doorTransparent;
+            const btn = document.getElementById('btn-toggle-door');
+            if (doorMesh) {
+                doorMesh.material.opacity = state.doorTransparent ? 0.42 : 0.92;
+                if (btn) btn.classList.toggle('active', !state.doorTransparent);
+            }
+        }
+
+        function resetCamera3D() {
+            camera.position.set(20, 16, 23);
+            controls.target.set(0, 6.0, 0);
+            controls.update();
+        }
+
+        function onWindowResize() {
+            const container = document.getElementById('canvas-container');
+            if (!container || !camera || !renderer) return;
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        // Click / hover interaction on 3D components
+        function init3DInteraction() {
+            const container = document.getElementById('canvas-container');
+            const tooltip = document.getElementById('tooltip3d');
+            if (!container || !tooltip || !renderer) return;
+            const raycaster = new THREE.Raycaster();
+            const mouse = new THREE.Vector2();
+
+            function getIntersects(clientX, clientY) {
+                const rect = renderer.domElement.getBoundingClientRect();
+                mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+                mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+                raycaster.setFromCamera(mouse, camera);
+                
+                const all = [];
+                scene.traverse(o => { if (o.userData && o.userData.kind) all.push(o); });
+                const hits = raycaster.intersectObjects(all, true);
+                if (hits.length === 0) return null;
+                for (const h of hits) {
+                    let o = h.object;
+                    while (o) {
+                        if (o.userData && o.userData.kind) return { object: o, kind: o.userData.kind, label: o.userData.label, point: h.point };
+                        o = o.parent;
+                    }
+                }
+                return null;
+            }
+
+            renderer.domElement.addEventListener('mousemove', (e) => {
+                const hit = getIntersects(e.clientX, e.clientY);
+                if (hit) {
+                    container.style.cursor = 'pointer';
+                    tooltip.style.display = 'block';
+                    tooltip.innerText = hit.label || (hit.kind === 'heat' ? 'יחידת חימום — לחץ להפעלה/כיבוי' : 'מאוורר שאיבה + תריס צוּר — לחץ להפעלה/כיבוי');
+                    const rect = container.getBoundingClientRect();
+                    tooltip.style.left = (e.clientX - rect.left) + 'px';
+                    tooltip.style.top = (e.clientY - rect.top) + 'px';
+                } else {
+                    container.style.cursor = 'grab';
+                    tooltip.style.display = 'none';
+                }
+            });
+
+            renderer.domElement.addEventListener('mouseleave', () => {
+                tooltip.style.display = 'none';
+                container.style.cursor = 'grab';
+            });
+
+            renderer.domElement.addEventListener('click', (e) => {
+                const hit = getIntersects(e.clientX, e.clientY);
+                if (!hit) return;
+                if (hit.kind === 'vent' || hit.kind === 'modular_unit') {
+                    if (state.mode === 'VENTILATION') setSystemMode('OFF');
+                    else setSystemMode('VENTILATION');
+                } else if (hit.kind === 'heat') {
+                    if (state.mode === 'HEATING') setSystemMode('OFF');
+                    else setSystemMode('HEATING');
+                }
+            });
+        }
+
+        // 3D Loading Overlay Sequence (Lightweight, Professional, Snappy)
+        /* The loader reflects real progress rather than a timed animation:
+           setLoadingStep() is called at each stage of init3D(), and
+           finishLoading() runs once the scene genuinely exists. */
+        function setLoadingStep(text, percent) {
+            const bar = document.getElementById('loading-progress-bar');
+            const stepText = document.getElementById('loading-step-text');
+            if (stepText && text) stepText.innerText = text;
+            if (bar && typeof percent === 'number') bar.style.width = percent + '%';
+        }
+
+        function finishLoading() {
+            const overlay = document.getElementById('loading-overlay-3d');
+            if (!overlay) return;
+            setLoadingStep('מוכן', 100);
+            // One frame at 100% so the bar does not appear to skip the end.
+            requestAnimationFrame(() => {
+                overlay.style.opacity = '0';
+                overlay.style.pointerEvents = 'none';
+                setTimeout(() => { overlay.style.display = 'none'; }, 380);
+            });
+        }
+
+        /* ==========================================================================
+           6. Firestore Bridge
+
+           Everything below is called by the module script at the end of this
+           file. Direction is strictly one-way in live mode:
+             Firestore -> state -> DOM/3D
+           The only things travelling the other way are `desired` setpoints and
+           command documents, both via BackendAdapter.
+           ========================================================================== */
+
+        const DEFAULT_SENSOR_LABELS = ['עליון שמאל', 'עליון ימין', 'מרכז התא', 'תחתון שמאל', 'תחתון ימין'];
+
+        /* Sensor labels arrive from Firestore telemetry, i.e. from outside this
+           page, and are interpolated into innerHTML — so they must be escaped. */
+        function escapeHtmlUI(value) {
+            return String(value == null ? '' : value).replace(/[&<>"']/g, (c) => (
+                { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+            ));
+        }
+
+        /* Sensor rows are data-driven so a chamber with a different sensorCount
+           needs no code change. The s{i}-temp / s{i}-rh id scheme is preserved,
+           which is why the rest of the file needs no edits. */
+        function renderSensorRows(count, labels) {
+            const host = document.getElementById('sensor-rows');
+            if (!host) return;
+
+            state.sensorCount = count;
+            let html = '';
+
+            for (let i = 1; i <= count; i++) {
+                const label = (labels && labels[i - 1]) || DEFAULT_SENSOR_LABELS[i - 1] || `מיקום ${i}`;
+                const seed = state.sensors[i - 1] || { temp: state.ambientTemp, rh: state.ambientRH };
+
+                /* Always read-only. These are measurements taken by the
+                   Raspberry Pi; there is nothing for an operator to set here.
+                   `readonly` blocks typing but not scripted writes, so the
+                   simulator can still drive these fields. */
+                html += `
+                <div class="sensor-row">
+                    <span class="name">
+                        <span id="s${i}-dot" class="dot"></span> ${escapeHtmlUI(label)}
+                    </span>
+                    <input type="number" id="s${i}-temp" value="${seed.temp.toFixed(1)}" readonly tabindex="-1">
+                    <input type="number" id="s${i}-rh" value="${seed.rh.toFixed(1)}" readonly tabindex="-1">
+                </div>`;
+            }
+
+            host.innerHTML = html;
+
+            const heading = document.getElementById('sensors-heading');
+            if (heading) heading.innerText = `חיישני פנים התא (${count})`;
+        }
+
+        /* Switches between hardware-backed and locally simulated data. */
+        function setSourceMode(source) {
+            state.source = source;
+            const live = isLive();
+
+            const rand = document.getElementById('btn-randomize');
+            if (rand) rand.classList.toggle('hidden', live);
+
+            const note = document.getElementById('diag-note');
+            if (note) {
+                note.innerText = live
+                    ? 'מצב הרכיבים מתקבל בזמן אמת מבקר ה-Raspberry Pi דרך Firestore. לא ניתן לדמות נתק כאשר קיים בקר פעיל.'
+                    : 'מצב סימולציה מקומי: באפשרותך לדמות נתק תקשורת ברכיב כדי לראות סמני שגיאה בתצוגת התלת-ממד ובלוח הבקרה.';
+            }
+
+            ['s2', 's0', 'topfan'].forEach(renderFaultIndicator);
+            renderSensorRows(state.sensorCount, state.sensorLabels);
+            renderSourceBanner();
+        }
+
+        function renderSourceBanner() {
+            const banner = document.getElementById('source-banner');
+            const text = document.getElementById('source-banner-text');
+            const btn = document.getElementById('btn-toggle-sim');
+            if (!banner || !text || !btn) return;
+
+            banner.classList.remove('hidden');
+            btn.className = 'banner-btn';
+
+            if (isLive()) {
+                banner.className = 'banner banner-live';
+                text.innerHTML = '<i class="fa-solid fa-satellite-dish"></i> נתונים חיים מבקר ה-Raspberry Pi — כל הקריאות מתקבלות מהחומרה.';
+                btn.innerText = 'מעבר לסימולציה';
+            } else {
+                banner.className = 'banner banner-sim';
+                // Be precise about what is and is not persisted: the readings are
+                // fabricated locally, but the setpoints really are saved.
+                text.innerHTML = '<i class="fa-solid fa-flask"></i> '
+                    + '<strong>קריאות החיישנים בסימולציה מקומית</strong> ואינן נשמרות — הבקר אינו מקושר. '
+                    + 'הגדרות המצב והיעד <strong>כן נשמרות ב-Firestore</strong> ויועברו לבקר כשיתחבר.';
+                btn.innerText = state.piOnline ? 'חזרה לנתונים חיים' : 'חזרה לנתונים חיים (הבקר מנותק)';
+            }
+        }
+
+        /* Live telemetry: Firestore -> state, then render. */
+        function applyTelemetry(t) {
+            if (!t) return;
+
+            if (t.ambient) {
+                if (typeof t.ambient.temp === 'number') state.ambientTemp = t.ambient.temp;
+                if (typeof t.ambient.rh === 'number') state.ambientRH = t.ambient.rh;
+            }
+
+            if (Array.isArray(t.sensors) && t.sensors.length) {
+                state.sensors = t.sensors.map(s => ({
+                    temp: typeof s.temp === 'number' ? s.temp : state.ambientTemp,
+                    rh: typeof s.rh === 'number' ? s.rh : state.ambientRH
+                }));
+                const labels = t.sensors.map(s => s.label);
+                if (t.sensors.length !== state.sensorCount) {
+                    state.sensorLabels = labels;
+                    renderSensorRows(t.sensors.length, labels);
+                }
+            }
+
+            const n = state.sensors.length || 1;
+            state.avgTemp = typeof t.avgTemp === 'number'
+                ? t.avgTemp
+                : state.sensors.reduce((a, s) => a + s.temp, 0) / n;
+            state.avgRH = typeof t.avgRH === 'number'
+                ? t.avgRH
+                : state.sensors.reduce((a, s) => a + s.rh, 0) / n;
+
+            applySensorHealth(t);
+            updateCalculations();
+        }
+
+        /* Actual actuator state from the controller. Feeds the same target
+           variables the animation loop already interpolates towards, so the 3D
+           fans, shutters and heater glow reflect real hardware. */
+        function applyReported(reported) {
+            if (!reported) return;
+            const num = (v) => (typeof v === 'number' ? v : 0);
+
+            state.targetFanTop = num(reported.fanTopSpeed);
+            state.targetFanBottom = num(reported.fanBottomSpeed);
+            state.targetShutterTop = num(reported.shutterTopOpen);
+            state.targetShutterBottom = num(reported.shutterBottomOpen);
+            state.targetHeater = num(reported.heaterIntensity);
+
+            if (reported.mode) applyReportedMode(reported.mode);
+            updateCalculations();
+        }
+
+        /* Setpoint as stored in Firestore. Another operator may have changed it,
+           so mirror it in — but never yank the control the user is holding. */
+        function applyDesired(desired) {
+            if (!desired) return;
+            state.desiredMode = desired.mode || state.desiredMode;
+
+            const valInput = document.getElementById('target-value-input');
+            const slider = document.getElementById('offset-slider');
+            const busy = document.activeElement === valInput || document.activeElement === slider;
+            if (busy) return;
+
+            if (desired.targetMode && desired.targetMode !== state.targetMode) {
+                state.targetMode = desired.targetMode;
+                renderTargetModeUI(desired.targetMode);
+            }
+            if (typeof desired.targetValue === 'number') {
+                state.targetValue = desired.targetValue;
+                if (valInput) valInput.value = desired.targetValue.toFixed(1);
+            }
+            updateCalculations();
+        }
+
+        /* Repaints the relative/absolute selector without resetting the value —
+           setTargetMode() intentionally resets it, which is wrong when the
+           change arrived from Firestore rather than from a click. */
+        function renderTargetModeUI(mode) {
+            const relative = mode === 'relative';
+            const btnRel = document.getElementById('target-mode-relative');
+            const btnAbs = document.getElementById('target-mode-absolute');
+            const lbl = document.getElementById('target-input-label');
+            const unit = document.getElementById('target-unit');
+            const extras = document.getElementById('relative-extras');
+
+            // Styling lives in CSS, keyed off aria-pressed, so the accessible
+            // state and the visual state cannot drift apart.
+            if (btnRel) btnRel.setAttribute('aria-pressed', String(relative));
+            if (btnAbs) btnAbs.setAttribute('aria-pressed', String(!relative));
+
+            if (lbl) lbl.innerText = relative ? 'הפרש מהסביבה' : 'טמפרטורת יעד';
+            if (unit) unit.innerText = relative ? 'Δ°C' : '°C';
+            if (extras) extras.classList.toggle('hidden', !relative);
+        }
+
+        /* Header connectivity chips. */
+        function setPiOnline(online, detail) {
+            state.piOnline = online;
+            const dot = document.getElementById('header-pi-dot');
+            const label = document.getElementById('header-pi-status');
+            if (dot) dot.style.background = online ? '#0f9d76' : '#dc2626';
+            if (label) {
+                label.innerText = online ? 'מקושר' : (detail || 'מנותק');
+                label.style.color = online ? '#0b7057' : '#b91c1c';
+            }
+            renderSourceBanner();
+        }
+
+        function setDbStatus(connected, detail) {
+            const dot = document.getElementById('header-db-dot');
+            const label = document.getElementById('header-db-status');
+            if (dot) dot.style.background = connected ? '#0b5f9e' : '#d97706';
+            if (label) {
+                label.innerText = connected ? 'מסונכרן' : (detail || 'מנותק');
+                label.style.color = connected ? '#0b5f9e' : '#b45309';
+            }
+        }
+
+        /* Explicit bridge so the module script does not depend on which
+           declarations happen to land on `window`. */
+        window.ChamberUI = {
+            state,
+            isLive,
+            setBackendAdapter,
+            setSimulator,
+            setSourceMode,
+            renderSensorRows,
+            renderTargetModeUI,
+            applyTelemetry,
+            applyReported,
+            applyDesired,
+            applyReportedMode,
+            updateCalculations,
+            setPiOnline,
+            setDbStatus,
+            renderSourceBanner
+        };
+
+        window.onload = function() {
+            updateCalculations();
+            init3D();     // synchronous — the scene exists once this returns
+            finishLoading();
+        };
+    </script>
+
+    <!-- ======================================================================
+         Firestore wiring. Deferred by nature (type="module"), so it runs after
+         the classic script above has defined window.ChamberUI.
+         ====================================================================== -->
+    <script type="module">
+        import { requireApprovedUser, signOutAndRedirect, renderBlockingScreen } from './js/auth-guard.js';
+        import { attachChamber, listChamberTabs } from './js/chamber-store.js';
+        import { createSimulator } from './js/simulator.js';
+
+        document.getElementById('btn-signout').onclick = () => signOutAndRedirect();
+
+        const chamberId = new URLSearchParams(location.search).get('id');
+        if (!chamberId) {
+            renderBlockingScreen(
+                'לא נבחר תא אקלים',
+                'הכתובת חסרה מזהה תא. יש לחזור לרשימת התאים ולבחור תא.',
+                '',
+                '<a href="index.html" class="inline-block px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold transition">חזרה לרשימת התאים</a>'
+            );
+            throw new Error('missing chamber id');
+        }
+
+        const UI = window.ChamberUI;
+        UI.state.chamberId = chamberId;
+        document.getElementById('chamber-id-badge').innerText = chamberId;
+
+        await requireApprovedUser();
+
+        // Local physics model, used when no controller is reachable.
+        const simulator = createSimulator(UI);
+        UI.setSimulator(simulator);
+
+        // Manual override between live data and the local simulator.
+        document.getElementById('btn-toggle-sim').onclick = () => {
+            if (UI.isLive()) {
+                UI.setSourceMode('sim');
+                simulator.start();
+            } else {
+                simulator.stop();
+                UI.setSourceMode('live');
+                UI.updateCalculations();
+            }
+        };
+
+        const detach = await attachChamber(chamberId, UI, simulator);
+        window.addEventListener('pagehide', detach);
+
+        // Chamber switcher strip.
+        listChamberTabs(chamberId, document.getElementById('chamber-tabs'));
+    </script>
+</body>
+</html>

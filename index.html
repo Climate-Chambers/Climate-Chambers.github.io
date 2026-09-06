@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>תאי אקלים — בחירת תא | Climate Chamber Control System</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Heebo', sans-serif; background-color: #f1f5f9; color: #0f172a; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #e2e8f0; }
+        ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-100">
+
+    <header class="bg-white sticky top-0 z-50 px-6 py-3.5 border-b border-slate-200 shadow-sm flex flex-wrap justify-between items-center gap-4">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-600 to-blue-800 flex items-center justify-center shadow-md shadow-sky-600/20 text-white">
+                <i class="fa-solid fa-temperature-arrow-up text-xl"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-extrabold tracking-tight text-slate-900 flex items-center gap-2">
+                    מערכת בקרת תאי אקלים
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 font-semibold border border-sky-200">Climate Chamber Control System</span>
+                </h1>
+                <p class="text-xs text-slate-500 font-medium">בחירת תא אקלים לניטור ובקרה</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3 flex-wrap text-sm">
+            <span id="user-email" class="text-xs text-slate-600 font-semibold bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg" dir="ltr"></span>
+            <button id="btn-signout" class="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-700 transition text-xs font-bold flex items-center gap-1.5 border border-slate-300 shadow-sm">
+                <i class="fa-solid fa-arrow-right-from-bracket text-slate-500"></i> התנתק
+            </button>
+        </div>
+    </header>
+
+    <main class="flex-1 p-4 md:p-6 max-w-[1600px] mx-auto w-full">
+
+        <div class="flex items-end justify-between gap-4 mb-5">
+            <div>
+                <h2 class="text-lg font-extrabold text-slate-900 flex items-center gap-2">
+                    <i class="fa-solid fa-warehouse text-sky-600"></i> תאי האקלים במערכת
+                </h2>
+                <p class="text-xs text-slate-500 font-medium">כל תא מנוהל באופן עצמאי — מצב, חיישנים ובקרה נפרדים</p>
+            </div>
+            <span id="chamber-count" class="text-xs font-bold text-slate-500 bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm"></span>
+        </div>
+
+        <div id="chamber-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5"></div>
+
+        <div id="chamber-empty" class="hidden bg-white rounded-2xl border border-dashed border-slate-300 p-12 text-center">
+            <i class="fa-solid fa-circle-notch fa-spin text-3xl text-slate-300 mb-3"></i>
+            <p class="text-sm font-bold text-slate-700 mb-1">טוען תאי אקלים…</p>
+        </div>
+    </main>
+
+    <script type="module">
+        import { requireApprovedUser, signOutAndRedirect } from './js/auth-guard.js';
+        import { mountChamberList } from './js/chambers-list.js';
+
+        document.getElementById('btn-signout').onclick = () => signOutAndRedirect();
+
+        // Resolves only for a signed-in, approved user.
+        const { user } = await requireApprovedUser();
+        document.getElementById('user-email').innerText = user.email;
+
+        const unmount = mountChamberList({
+            grid: document.getElementById('chamber-grid'),
+            empty: document.getElementById('chamber-empty'),
+            count: document.getElementById('chamber-count')
+        });
+
+        window.addEventListener('pagehide', unmount);
+    </script>
+</body>
+</html>

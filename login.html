@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>כניסה למערכת בקרת תאי אקלים</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Heebo', sans-serif; background-color: #f1f5f9; color: #0f172a; }
+        .auth-tab-active { background: #0284c7; color: #fff; border-color: #0284c7; }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-5">
+
+    <div class="w-full max-w-md">
+
+        <!-- Brand header -->
+        <div class="flex flex-col items-center gap-3 mb-6 text-center">
+            <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-sky-600 to-blue-800 flex items-center justify-center shadow-md shadow-sky-600/20 text-white">
+                <i class="fa-solid fa-temperature-arrow-up text-2xl"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-extrabold tracking-tight text-slate-900">מערכת בקרת תאי אקלים</h1>
+                <p class="text-xs text-slate-500 font-medium">Climate Chamber Control System</p>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+
+            <!-- Mode tabs -->
+            <div class="grid grid-cols-2 gap-2 mb-5 p-1 bg-slate-100 rounded-xl border border-slate-200">
+                <button id="tab-signin" type="button"
+                    class="auth-tab-active py-2 rounded-lg text-xs font-bold border transition">
+                    התחברות
+                </button>
+                <button id="tab-signup" type="button"
+                    class="py-2 rounded-lg text-xs font-bold border border-transparent text-slate-600 hover:bg-white transition">
+                    הרשמה
+                </button>
+            </div>
+
+            <form id="auth-form" class="flex flex-col gap-4" novalidate>
+
+                <!-- Display name: sign-up only -->
+                <div id="field-name" class="hidden">
+                    <label for="input-name" class="text-xs font-bold text-slate-700 block mb-1.5">שם מלא</label>
+                    <input id="input-name" type="text" autocomplete="name" maxlength="60"
+                        class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+                </div>
+
+                <div>
+                    <label for="input-email" class="text-xs font-bold text-slate-700 block mb-1.5">כתובת דוא״ל</label>
+                    <input id="input-email" type="email" required autocomplete="email" dir="ltr"
+                        class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+                </div>
+
+                <div>
+                    <label for="input-password" class="text-xs font-bold text-slate-700 block mb-1.5">סיסמה</label>
+                    <input id="input-password" type="password" required autocomplete="current-password" dir="ltr" minlength="6"
+                        class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+                    <p id="password-hint" class="hidden text-[11px] text-slate-500 mt-1.5">לפחות 6 תווים.</p>
+                </div>
+
+                <!-- Error / info banner -->
+                <div id="auth-message" class="hidden rounded-lg px-3 py-2.5 text-xs font-bold border"></div>
+
+                <button id="auth-submit" type="submit"
+                    class="w-full py-3 rounded-xl bg-sky-600 hover:bg-sky-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white text-sm font-bold transition shadow-sm shadow-sky-600/20 flex items-center justify-center gap-2">
+                    <span id="auth-submit-label">התחבר</span>
+                    <i id="auth-spinner" class="fa-solid fa-circle-notch fa-spin hidden"></i>
+                </button>
+            </form>
+
+            <div id="signup-note" class="hidden text-[11px] text-slate-600 leading-relaxed mt-4 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <p class="mb-1.5">
+                    <i class="fa-solid fa-circle-info text-amber-600"></i>
+                    חשבון חדש נוצר במצב <strong>ממתין לאישור</strong> ואינו מקבל גישה לתאי האקלים עד לאישור מנהל.
+                </p>
+                <p>
+                    לאישור ההרשמה יש לפנות בדוא״ל ל־
+                    <a href="mailto:yehudah@volcani.agri.gov.il?subject=%D7%90%D7%99%D7%A9%D7%95%D7%A8%20%D7%94%D7%A8%D7%A9%D7%9E%D7%94%20%D7%9C%D7%9E%D7%A2%D7%A8%D7%9B%D7%AA%20%D7%91%D7%A7%D7%A8%D7%AA%20%D7%AA%D7%90%D7%99%20%D7%90%D7%A7%D7%9C%D7%99%D7%9D"
+                       class="font-extrabold text-amber-900 underline decoration-amber-500" dir="ltr">yehudah@volcani.agri.gov.il</a>
+                </p>
+            </div>
+        </div>
+
+        <p class="text-center text-[11px] text-slate-400 mt-5">
+            מכון וולקני — מרכז מחקר חקלאי | ניטור ובקרת תאי אקלים
+        </p>
+    </div>
+
+    <script type="module">
+        import {
+            createUserWithEmailAndPassword,
+            signInWithEmailAndPassword,
+            onAuthStateChanged
+        } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js';
+        import { doc, setDoc } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
+
+        import { auth, db } from './js/firebase-config.js';
+        import { newProfile } from './js/auth-guard.js';
+
+        let mode = 'signin';
+
+        const els = {
+            tabSignin: document.getElementById('tab-signin'),
+            tabSignup: document.getElementById('tab-signup'),
+            fieldName: document.getElementById('field-name'),
+            name: document.getElementById('input-name'),
+            email: document.getElementById('input-email'),
+            password: document.getElementById('input-password'),
+            passwordHint: document.getElementById('password-hint'),
+            message: document.getElementById('auth-message'),
+            form: document.getElementById('auth-form'),
+            submit: document.getElementById('auth-submit'),
+            submitLabel: document.getElementById('auth-submit-label'),
+            spinner: document.getElementById('auth-spinner'),
+            signupNote: document.getElementById('signup-note')
+        };
+
+        /* Where to land after a successful sign-in. Only same-origin relative
+           paths are honoured, so ?next= cannot be used as an open redirect. */
+        function nextTarget() {
+            const raw = new URLSearchParams(location.search).get('next');
+            if (!raw) return 'index.html';
+            if (/^[a-z][a-z0-9+.-]*:|^\/\//i.test(raw)) return 'index.html';
+            return raw.replace(/^\/+/, '');
+        }
+
+        // Already signed in? Skip the form entirely.
+        onAuthStateChanged(auth, (user) => {
+            if (user) location.replace(nextTarget());
+        });
+
+        const TAB_ACTIVE = 'auth-tab-active py-2 rounded-lg text-xs font-bold border transition';
+        const TAB_IDLE = 'py-2 rounded-lg text-xs font-bold border border-transparent text-slate-600 hover:bg-white transition';
+
+        function setMode(next) {
+            mode = next;
+            const isSignup = next === 'signup';
+
+            els.tabSignin.className = isSignup ? TAB_IDLE : TAB_ACTIVE;
+            els.tabSignup.className = isSignup ? TAB_ACTIVE : TAB_IDLE;
+            els.fieldName.classList.toggle('hidden', !isSignup);
+            els.passwordHint.classList.toggle('hidden', !isSignup);
+            els.signupNote.classList.toggle('hidden', !isSignup);
+            els.submitLabel.innerText = isSignup ? 'צור חשבון' : 'התחבר';
+            els.password.autocomplete = isSignup ? 'new-password' : 'current-password';
+            hideMessage();
+        }
+
+        els.tabSignin.onclick = () => setMode('signin');
+        els.tabSignup.onclick = () => setMode('signup');
+
+        function showMessage(text, kind = 'error') {
+            const styles = {
+                error: 'rounded-lg px-3 py-2.5 text-xs font-bold border bg-red-50 border-red-200 text-red-800',
+                info: 'rounded-lg px-3 py-2.5 text-xs font-bold border bg-sky-50 border-sky-200 text-sky-800'
+            };
+            els.message.className = styles[kind];
+            els.message.innerText = text;
+        }
+
+        function hideMessage() {
+            els.message.className = 'hidden rounded-lg px-3 py-2.5 text-xs font-bold border';
+            els.message.innerText = '';
+        }
+
+        function setBusy(busy) {
+            els.submit.disabled = busy;
+            els.spinner.classList.toggle('hidden', !busy);
+        }
+
+        const ERRORS = {
+            'auth/invalid-credential': 'דוא״ל או סיסמה שגויים.',
+            'auth/invalid-email': 'כתובת הדוא״ל אינה תקינה.',
+            'auth/user-disabled': 'החשבון הושבת. יש לפנות למנהל המערכת.',
+            'auth/user-not-found': 'דוא״ל או סיסמה שגויים.',
+            'auth/wrong-password': 'דוא״ל או סיסמה שגויים.',
+            'auth/too-many-requests': 'יותר מדי נסיונות כניסה. יש להמתין מספר דקות.',
+            'auth/email-already-in-use': 'כתובת הדוא״ל כבר רשומה במערכת. יש לעבור להתחברות.',
+            'auth/weak-password': 'הסיסמה חלשה מדי — נדרשים לפחות 6 תווים.',
+            'auth/network-request-failed': 'שגיאת רשת. יש לבדוק את החיבור לאינטרנט.',
+            'auth/operation-not-allowed':
+                'ספק הכניסה Email/Password אינו מופעל בפרויקט. יש להפעיל אותו בקונסולת Firebase תחת Authentication.'
+        };
+
+        els.form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideMessage();
+
+            const email = els.email.value.trim();
+            const password = els.password.value;
+
+            if (!email || !password) {
+                showMessage('יש למלא דוא״ל וסיסמה.');
+                return;
+            }
+            if (mode === 'signup' && password.length < 6) {
+                showMessage(ERRORS['auth/weak-password']);
+                return;
+            }
+
+            setBusy(true);
+            try {
+                if (mode === 'signup') {
+                    const cred = await createUserWithEmailAndPassword(auth, email, password);
+                    // Profile doc is what gates access; approved:false is enforced by rules.
+                    await setDoc(
+                        doc(db, 'users', cred.user.uid),
+                        newProfile(cred.user, els.name.value.trim())
+                    );
+                } else {
+                    await signInWithEmailAndPassword(auth, email, password);
+                }
+                // onAuthStateChanged performs the redirect.
+            } catch (err) {
+                const code = err && err.code ? err.code : '';
+                showMessage(ERRORS[code] || `שגיאה בהתחברות: ${code || err.message}`);
+                setBusy(false);
+            }
+        });
+
+        setMode('signin');
+    </script>
+</body>
+</html>
