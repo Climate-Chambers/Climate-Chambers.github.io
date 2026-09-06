@@ -101,8 +101,8 @@
         } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js';
         import { doc, setDoc } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
 
-        import { auth, db } from './js/firebase-config.js';
-        import { newProfile } from './js/auth-guard.js';
+        import { auth, db } from './js/firebase-config.js?v=20260906a';
+        import { newProfile } from './js/auth-guard.js?v=20260906a';
 
         let mode = 'signin';
 
@@ -122,18 +122,42 @@
             signupNote: document.getElementById('signup-note')
         };
 
-        /* Where to land after a successful sign-in. Only same-origin relative
-           paths are honoured, so ?next= cannot be used as an open redirect. */
+        /* Where to land after a successful sign-in.
+
+           `next` is an absolute path written by auth-guard.js
+           (location.pathname), so it must be resolved against the origin — not
+           string-trimmed. Stripping its leading slash used to turn "/" into ""
+           and `location.replace('')` reloads the CURRENT page, which with a
+           live session became an endless refresh; under a sub-path deployment
+           (GitHub Pages project sites) it doubled the folder instead.
+
+           Two invariants make that impossible now: the target must be
+           same-origin, so ?next= is not an open redirect, and it must not be
+           this page, so a self-redirect can never loop. */
         function nextTarget() {
+            const fallback = new URL('index.html', location.href);
             const raw = new URLSearchParams(location.search).get('next');
-            if (!raw) return 'index.html';
-            if (/^[a-z][a-z0-9+.-]*:|^\/\//i.test(raw)) return 'index.html';
-            return raw.replace(/^\/+/, '');
+            if (!raw) return fallback;
+
+            let target;
+            try {
+                target = new URL(raw, location.href);
+            } catch {
+                return fallback;
+            }
+            if (target.origin !== location.origin) return fallback;
+            if (target.pathname === location.pathname) return fallback;
+            return target;
         }
 
-        // Already signed in? Skip the form entirely.
+        /* Already signed in? Skip the form entirely. The listener stays
+           subscribed for the life of the page and token refreshes re-fire it,
+           so the navigation is latched — one redirect per page load. */
+        let leaving = false;
         onAuthStateChanged(auth, (user) => {
-            if (user) location.replace(nextTarget());
+            if (!user || leaving) return;
+            leaving = true;
+            location.replace(nextTarget().href);
         });
 
         const TAB_ACTIVE = 'auth-tab-active py-2 rounded-lg text-xs font-bold border transition';
@@ -186,7 +210,11 @@
             'auth/weak-password': 'הסיסמה חלשה מדי — נדרשים לפחות 6 תווים.',
             'auth/network-request-failed': 'שגיאת רשת. יש לבדוק את החיבור לאינטרנט.',
             'auth/operation-not-allowed':
-                'ספק הכניסה Email/Password אינו מופעל בפרויקט. יש להפעיל אותו בקונסולת Firebase תחת Authentication.'
+                'ספק הכניסה Email/Password אינו מופעל בפרויקט. יש להפעיל אותו בקונסולת Firebase תחת Authentication.',
+            /* Bites the first time the site is served from anywhere other than
+               Firebase Hosting or localhost — GitHub Pages, for instance. */
+            'auth/unauthorized-domain':
+                `הדומיין ${location.hostname} אינו מורשה בפרויקט. יש להוסיף אותו בקונסולת Firebase תחת Authentication ← Settings ← Authorized domains.`
         };
 
         els.form.addEventListener('submit', async (e) => {

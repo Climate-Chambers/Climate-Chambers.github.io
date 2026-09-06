@@ -3430,9 +3430,9 @@
          the classic script above has defined window.ChamberUI.
          ====================================================================== -->
     <script type="module">
-        import { requireApprovedUser, signOutAndRedirect, renderBlockingScreen } from './js/auth-guard.js';
-        import { attachChamber, listChamberTabs } from './js/chamber-store.js';
-        import { createSimulator } from './js/simulator.js';
+        import { requireApprovedUser, signOutAndRedirect, renderBlockingScreen } from './js/auth-guard.js?v=20260906a';
+        import { attachChamber, listChamberTabs } from './js/chamber-store.js?v=20260906a';
+        import { createSimulator } from './js/simulator.js?v=20260906a';
 
         document.getElementById('btn-signout').onclick = () => signOutAndRedirect();
 
