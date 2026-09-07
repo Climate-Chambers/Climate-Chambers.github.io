@@ -147,7 +147,16 @@ function card(id, { chamber, telemetry }) {
 
     // Reported mode is the truth; desired is only an outstanding request.
     const mode = reported.mode || desired.mode || 'OFF';
-    const pending = desired.mode && reported.mode && desired.mode !== reported.mode;
+
+    /* A mismatch between the two only means "in flight" while there is a
+       controller online to answer it. Once the Pi goes quiet, `reported` is
+       frozen at the last thing the hardware actually did, so a mismatch is
+       permanent by definition — the earlier version showed "ממתין לבקר"
+       forever on every chamber whose controller had ever run and then
+       stopped, even though the mode change was accepted and stored. */
+    const mismatch = Boolean(desired.mode && reported.mode && desired.mode !== reported.mode);
+    const awaitingAck = mismatch && online;
+    const savedForLater = mismatch && !online;
 
     const avgTemp = telemetry ? telemetry.avgTemp : undefined;
     const avgRH = telemetry ? telemetry.avgRH : undefined;
@@ -200,9 +209,15 @@ function card(id, { chamber, telemetry }) {
             <span class="text-[11px] font-bold px-2.5 py-1 rounded-full border ${MODE_STYLES[mode] || MODE_STYLES.OFF}">
                 מצב: ${MODE_LABELS[mode] || mode}
             </span>
-            ${pending
-                ? `<span class="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-300 px-2 py-1 rounded-full">
+            ${awaitingAck
+                ? `<span class="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-300 px-2 py-1 rounded-full"
+                         title="השינוי נשלח לבקר וממתין לאישורו">
                        <i class="fa-solid fa-circle-notch fa-spin"></i> ממתין לבקר
+                   </span>`
+                : savedForLater
+                ? `<span class="text-[11px] font-bold text-slate-600 bg-slate-100 border border-slate-300 px-2 py-1 rounded-full"
+                         title="השינוי נשמר ויוחל כשהבקר יתחבר">
+                       <i class="fa-regular fa-clock"></i> מבוקש: ${escapeHtml(MODE_LABELS[desired.mode] || desired.mode)}
                    </span>`
                 : `<span class="text-xs font-bold text-sky-600 group-hover:text-sky-800 transition">
                        פתח בקרה <i class="fa-solid fa-arrow-left"></i>

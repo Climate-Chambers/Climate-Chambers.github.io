@@ -1472,7 +1472,21 @@
             const sysBadge = document.getElementById('sys-mode-badge');
             if (sysBadge) {
                 const label = MODE_LABELS[highlight] || highlight;
-                sysBadge.innerText = pending ? `ממתין: ${label}` : `מצב: ${label}`;
+                /* An unconfirmed setpoint means two different things: with the
+                   controller connected it really is in flight, but with the Pi
+                   offline nothing is coming — the value is stored and will be
+                   applied on reconnect. Saying "ממתין" in that case reads as a
+                   stuck request. */
+                if (!pending) {
+                    sysBadge.innerText = `מצב: ${label}`;
+                    sysBadge.title = 'המצב שהבקר מדווח עליו';
+                } else if (state.piOnline) {
+                    sysBadge.innerText = `ממתין לבקר: ${label}`;
+                    sysBadge.title = 'השינוי נשלח לבקר וממתין לאישורו';
+                } else {
+                    sysBadge.innerText = `מבוקש: ${label}`;
+                    sysBadge.title = 'השינוי נשמר ויוחל כשהבקר יתחבר';
+                }
                 sysBadge.className = 'pill ' + (pending ? 'pill-warm' : 'pill-cool');
             }
         }
@@ -3377,7 +3391,15 @@
 
         /* Header connectivity chips. */
         function setPiOnline(online, detail) {
+            const changed = state.piOnline !== online;
             state.piOnline = online;
+
+            // The pending badge is worded off connectivity, so re-paint it when
+            // the controller comes or goes with a setpoint still unconfirmed.
+            if (changed && state.pendingMode) {
+                renderModeButtons(state.desiredMode || state.mode, true);
+            }
+
             const dot = document.getElementById('header-pi-dot');
             const label = document.getElementById('header-pi-status');
             if (dot) dot.style.background = online ? '#0f9d76' : '#dc2626';
