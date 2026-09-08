@@ -24,7 +24,7 @@ import {
     updateDoc
 } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
 
-import { auth, db, HEARTBEAT_TIMEOUT_MS } from './firebase-config.js?v=20260906a';
+import { auth, db, HEARTBEAT_TIMEOUT_MS } from './firebase-config.js?v=20260908b';
 
 /**
  * Subscribes the dashboard to one chamber. Returns a teardown function.
@@ -57,26 +57,37 @@ export async function attachChamber(chamberId, ui, simulator) {
                active, which silently discarded real setpoint changes on any
                chamber that had no heartbeat yet. */
             try {
-                if (command === 'setSystemMode' || command === 'setTarget') {
+                if (command === 'setSystemMode' || command === 'setTarget' || command === 'setSimAmbient') {
                     /* Always write the COMPLETE desired map, never dotted
                        sub-paths. The security rules require the resulting map
                        to carry all five keys; a dotted update only satisfies
                        that if the document already had a full map, so on a
                        hand-created chamber it would fail with a bare
                        permission-denied. Sending the whole map makes the write
-                       valid whatever state the document was in. */
+                       valid whatever state the document was in.
+
+                       The corollary: every other key must be carried along on
+                       every write, or changing the mode would silently drop the
+                       demo ambient override. */
                     const s = ui.state;
-                    await updateDoc(chamberRef, {
-                        desired: {
-                            mode: payload.mode || s.desiredMode || s.mode || 'AUTO',
-                            targetMode: payload.targetMode || s.targetMode || 'relative',
-                            targetValue: typeof payload.targetValue === 'number'
-                                ? payload.targetValue
-                                : (typeof s.targetValue === 'number' ? s.targetValue : 10),
-                            updatedAt: serverTimestamp(),
-                            updatedBy: uid
-                        }
-                    });
+                    const desired = {
+                        mode: payload.mode || s.desiredMode || s.mode || 'AUTO',
+                        targetMode: payload.targetMode || s.targetMode || 'relative',
+                        targetValue: typeof payload.targetValue === 'number'
+                            ? payload.targetValue
+                            : (typeof s.targetValue === 'number' ? s.targetValue : 10),
+                        updatedAt: serverTimestamp(),
+                        updatedBy: uid
+                    };
+
+                    /* Demo outside temperature. Omitting the key — not writing
+                       null — is how the override is cleared, because the rules
+                       type it as a number when present and the agent falls back
+                       to its own probe the moment it disappears. */
+                    const sim = ('simAmbient' in payload) ? payload.simAmbient : s.simAmbient;
+                    if (typeof sim === 'number' && isFinite(sim)) desired.simAmbient = sim;
+
+                    await updateDoc(chamberRef, { desired });
                 } else {
                     // Imperative one-shots (calibrate / reboot / toggleDevice).
                     await addDoc(collection(db, 'chambers', chamberId, 'commands'), {

@@ -19,7 +19,7 @@ import {
     serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
 
-import { auth, db } from './firebase-config.js?v=20260906a';
+import { auth, db } from './firebase-config.js?v=20260908b';
 
 /* Shape of a freshly created profile. Must match isValidNewUser() in
    firestore.rules — approved MUST be false or the write is rejected. */

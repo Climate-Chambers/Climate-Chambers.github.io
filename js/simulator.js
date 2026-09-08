@@ -13,6 +13,17 @@
 
 const TICK_MS = 2500;
 
+/* The demo's dynamics, and the one place they are written down: half a degree
+   a second toward the target, exactly like pi/pi_connect.py. The dashboard
+   states these figures to the operator (renderSimModelNote in chamber.html),
+   which only stays true if the text is generated from the same constants the
+   loop below applies — so keep them here, not there. */
+export const SIM_MODEL = {
+    ratePerSecondC: 0.5,
+    intervalS: TICK_MS / 1000,
+    deadbandC: 0.3          // the deadband in evaluateControlLoop()
+};
+
 /**
  * @param {object} ui  the window.ChamberUI bridge exposed by chamber.html
  */
@@ -20,18 +31,34 @@ export function createSimulator(ui) {
     const { state } = ui;
     let timer = null;
 
-    /* Advances the thermal model one step. Internal sensor values are written
-       into their (editable) fields, which are authoritative in simulator mode.
-       Ambient is owned here rather than read from the DOM, because the ambient
-       fields are read-only displays of a measured value — the same division of
-       responsibility the real Pi has. */
+    // So the dashboard can describe this model while it is the one running.
+    state.localSimModel = SIM_MODEL;
+
+    /* Advances the demo one step. Internal sensor values are written into their
+       fields, which are authoritative in simulator mode. Ambient is owned here
+       rather than read from the DOM, because the ambient fields are read-only
+       displays of a measured value — the same division of responsibility the
+       real Pi has. */
     function tick() {
-        // Slow outdoor drift, mirroring virtual-pi.mjs / chamber_agent.py.
-        state.ambientTemp += (Math.random() - 0.5) * 0.08;
+        /* Outdoors: the operator's demo override when one is set, otherwise a
+           slow drift, mirroring virtual-pi.mjs / pi_connect.py. Honouring the
+           override here as well means the same demo works whether or not a
+           controller is connected. */
+        if (typeof state.simAmbient === 'number') {
+            state.ambientTemp = state.simAmbient;
+        } else {
+            state.ambientTemp += (Math.random() - 0.5) * 0.08;
+        }
         state.ambientRH = Math.min(95, Math.max(15, state.ambientRH + (Math.random() - 0.5) * 0.3));
 
         const heating = state.targetHeater > 0.5;
         const venting = state.targetFanTop > 0.5;
+
+        /* Half a degree a second toward the target and stop there. In AUTO the
+           target is the limit; in a manual mode there is none, except that
+           ventilation can never pull the chamber below the outside air. */
+        const delta = SIM_MODEL.ratePerSecondC * SIM_MODEL.intervalS;
+        const auto = state.mode === 'AUTO';
 
         for (let i = 1; i <= state.sensorCount; i++) {
             const tEl = document.getElementById(`s${i}-temp`);
@@ -43,15 +70,15 @@ export function createSimulator(ui) {
             if (isNaN(t) || isNaN(r)) continue;
 
             if (heating) {
-                t += 0.22 + Math.random() * 0.12;
+                t = auto ? Math.min(t + delta, state.calculatedTargetTemp) : t + delta;
                 r = Math.max(5, r - 0.18);
             } else if (venting) {
-                t += (state.ambientTemp - t) * 0.10;
+                const floor = auto
+                    ? Math.max(state.ambientTemp, state.calculatedTargetTemp)
+                    : state.ambientTemp;
+                t = Math.max(t - delta, floor);
                 r += (state.ambientRH - r) * 0.10;
-            } else {
-                t += (state.ambientTemp - t) * 0.015;
             }
-            t += (Math.random() - 0.5) * 0.06;
 
             tEl.value = t.toFixed(1);
             rEl.value = r.toFixed(1);

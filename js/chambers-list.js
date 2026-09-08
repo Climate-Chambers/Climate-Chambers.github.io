@@ -14,7 +14,7 @@ import {
     query
 } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
 
-import { db, HEARTBEAT_TIMEOUT_MS } from './firebase-config.js?v=20260906a';
+import { db, HEARTBEAT_TIMEOUT_MS } from './firebase-config.js?v=20260908b';
 
 const MODE_LABELS = {
     AUTO: 'אוטומטי',

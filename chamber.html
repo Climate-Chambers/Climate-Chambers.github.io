@@ -178,7 +178,8 @@
         .stepper input::-webkit-outer-spin-button,
         .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         .stepper input[type=number] { -moz-appearance: textfield; }
-        .stepper #target-unit {
+        .stepper #target-unit,
+        .stepper .unit {
             display: flex;
             align-items: center;
             padding: 0 8px;
@@ -712,9 +713,54 @@
                 </div>
             </div>
 
-            <!-- The external probe used to have a panel of its own here. It
-                 said exactly what the "חוץ" tile above already says, so it is
-                 gone: every reading appears in exactly one place. -->
+            <!-- 1. Outside temperature — demo override.
+                 The external probe used to have a *display* panel here, saying
+                 exactly what the "חוץ" tile above already says; that is gone.
+                 What sits here now is a control, not a reading: the chamber's
+                 whole behaviour is relative to the outdoor air, so a target of
+                 "+10°C above outside" only demonstrates anything if outside can
+                 move. With no climate room around the demo, the operator moves
+                 it by hand and the controller chases the recomputed target.
+                 While the switch is off this panel holds nothing but the switch,
+                 and "חוץ" keeps showing the real probe. -->
+            <div class="panel">
+                <div class="panel-head">
+                    <h2><i class="fa-solid fa-cloud-sun"></i> טמפרטורת חוץ</h2>
+                    <!-- Only labelled when the override is ON. Saying "real
+                         sensor" the rest of the time states the default, which
+                         the unchecked switch below already says. -->
+                    <span id="amb-sim-pill" class="pill pill-warm hidden">עקיפת דמו פעילה</span>
+                </div>
+
+                <label class="flex items-center gap-2 text-[11px] font-semibold text-slate-600 cursor-pointer select-none">
+                    <input type="checkbox" id="amb-sim-enable" class="w-4 h-4 accent-sky-600 cursor-pointer">
+                    <span>עקיפה לצורך דמו — קביעת טמפרטורת החוץ ידנית</span>
+                </label>
+
+                <div id="amb-sim-controls" class="hidden mt-3">
+                    <div class="stepper">
+                        <button type="button" id="amb-minus" aria-label="הקטן">−</button>
+                        <input type="number" id="amb-value-input" value="21.0" step="0.5" min="-40" max="80" aria-describedby="amb-unit">
+                        <!-- dir="ltr": "°C" opens with a neutral character, so
+                             in this RTL page it would otherwise render "C°". -->
+                        <span id="amb-unit" class="unit" dir="ltr">°C</span>
+                        <button type="button" id="amb-plus" class="accent" aria-label="הגדל">+</button>
+                    </div>
+
+                    <input type="range" id="amb-slider" class="offset-range mt-3" min="-10" max="50" step="0.5" value="21" aria-label="טמפרטורת חוץ לצורך דמו">
+
+                    <div class="flex items-center gap-1.5 flex-wrap mt-2">
+                        <button type="button" class="amb-preset offset-preset" data-amb="0">0</button>
+                        <button type="button" class="amb-preset offset-preset" data-amb="10">10</button>
+                        <button type="button" class="amb-preset offset-preset" data-amb="15">15</button>
+                        <button type="button" class="amb-preset offset-preset" data-amb="20">20</button>
+                        <button type="button" class="amb-preset offset-preset" data-amb="25">25</button>
+                        <button type="button" class="amb-preset offset-preset" data-amb="30">30</button>
+                        <button type="button" class="amb-preset offset-preset" data-amb="35">35</button>
+                        <span id="amb-sim-hint" class="text-[10px] text-slate-400 mr-auto">הבקר מאמץ את הערך תוך שניות</span>
+                    </div>
+                </div>
+            </div>
 
             <!-- 2. Target Temperature Controller Logic -->
             <div class="panel">
@@ -737,24 +783,41 @@
                     </label>
                     <div class="stepper">
                         <button type="button" id="offset-minus" aria-label="הקטן">−</button>
-                        <input type="number" id="target-value-input" value="10.0" step="0.5" aria-describedby="target-unit">
-                        <span id="target-unit">Δ°C</span>
+                        <input type="number" id="target-value-input" value="10.0" step="0.5" min="0" max="10" aria-describedby="target-unit">
+                        <!-- dir="ltr": in absolute mode this becomes "°C",
+                             which opens with a neutral character and would
+                             render "C°" on an RTL page. -->
+                        <span id="target-unit" dir="ltr">Δ°C</span>
                         <button type="button" id="offset-plus" class="accent" aria-label="הגדל">+</button>
                     </div>
                 </div>
 
-                <!-- Relative-mode extras: slider + presets on one line -->
+                <!-- Relative-mode extras: slider + presets on one line.
+                     The offset only goes UP (0…10). A negative offset would ask
+                     the chamber to sit below the outdoor air, and the only
+                     cooling this machine has is ventilation — which exchanges
+                     air with outdoors and therefore cannot go past it. Offering
+                     it would be offering a setpoint that can never be met. -->
                 <div id="relative-extras" class="mt-3 pt-3 border-t border-slate-100 flex flex-col gap-2">
-                    <input type="range" id="offset-slider" class="offset-range" min="-10" max="20" step="0.5" value="10" aria-label="כיוון הפרש טמפרטורה">
+                    <input type="range" id="offset-slider" class="offset-range" min="0" max="10" step="0.5" value="10" aria-label="הפרש טמפרטורה מעל הסביבה">
                     <div class="flex items-center gap-1.5 flex-wrap">
-                        <button type="button" class="offset-preset" data-offset="-5">‎−5</button>
+                        <button type="button" class="offset-preset" data-offset="0">0</button>
                         <button type="button" class="offset-preset" data-offset="2">+2</button>
                         <button type="button" class="offset-preset" data-offset="5">+5</button>
+                        <button type="button" class="offset-preset" data-offset="7.5">+7.5</button>
                         <button type="button" class="offset-preset" data-offset="10">+10</button>
-                        <button type="button" class="offset-preset" data-offset="15">+15</button>
-                        <span class="text-[10px] text-slate-400 mr-auto tabular-nums">יעד = סביבה + Δ</span>
+                        <span class="text-[10px] text-slate-400 mr-auto tabular-nums">יעד = סביבה + Δ · ‎0 עד 10</span>
                     </div>
                 </div>
+
+                <!-- Absolute mode has no such bound — any temperature may be
+                     typed — so it is worth saying when the one typed is below
+                     the outdoor air and therefore out of reach. -->
+                <p id="target-unreachable" class="hidden mt-3 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    היעד נמוך מטמפרטורת החוץ. הקירור היחיד בתא הוא אוורור, שאינו יכול להוריד
+                    את הטמפרטורה מתחת לחוץ — ולכן היעד לא יושג ותיוותר סטייה.
+                </p>
             </div>
 
             <!-- 3. Internal Chamber 5 Sensors Panel -->
@@ -773,8 +836,11 @@
                      keeping the s{i}-temp / s{i}-rh id scheme intact. -->
                 <div class="sensor-head">
                     <span>מיקום</span>
-                    <span class="text-center">טמפ׳ °C</span>
-                    <span class="text-center">לחות %</span>
+                    <!-- The units are bidi-isolated: "°C" and "%" open with
+                         neutral characters and would otherwise render mirrored
+                         in this RTL page ("C°"). -->
+                    <span class="text-center">טמפ׳ <span dir="ltr">°C</span></span>
+                    <span class="text-center">לחות <span dir="ltr">%</span></span>
                 </div>
                 <div id="sensor-rows"></div>
 
@@ -804,6 +870,24 @@
                     <button onclick="setSystemMode('OFF')" id="btn-mode-off" class="mode-btn">
                         <i class="fa-solid fa-power-off"></i> כיבוי
                     </button>
+                </div>
+
+                <!-- How fast the demo moves. Hidden the moment a real
+                     controller is on the other end (it reports no simModel),
+                     and the numbers in it are generated from the model that is
+                     actually running rather than typed in here — see
+                     renderSimModelNote(). -->
+                <div id="sim-model-note" class="hidden -mt-2 mb-5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] leading-relaxed text-amber-900">
+                    <div class="font-bold flex items-center gap-1.5 mb-1">
+                        <i class="fa-solid fa-flask-vial"></i> אופן הפעולה בדמו
+                    </div>
+                    <div id="sim-model-rates" dir="rtl"></div>
+                    <div class="mt-1 text-amber-800/90">
+                        קצב זה הוא <strong>לצורך הדמו בלבד</strong> — קבוע ופשוט, כדי להראות את
+                        התנהגות המערכת. בתא האמיתי מהירות השינוי תיקבע על ידי המסה התרמית והספק
+                        הרכיבים, וההחלטות יתקבלו על ידי אלגוריתם הבקרה שייכתב עבור בקר התא
+                        וישולב כאן בהמשך.
+                    </div>
                 </div>
 
                 <!-- Actuators Status Monitor -->
@@ -1195,7 +1279,19 @@
         const state = {
             ambientTemp: 21.0,
             ambientRH: 45.0,
-            
+
+            /* Demo override for the outdoor temperature: a number while the
+               operator is driving it by hand, null when the controller's own
+               ambient probe is in charge. Mirrored from desired.simAmbient. */
+            simAmbient: null,
+
+            /* The rates of whichever thermal model is producing the numbers on
+               screen — `simModel` as published by a simulating controller,
+               `localSimModel` when this browser is the one simulating. Both
+               null means the readings are real and no demo note is shown. */
+            simModel: null,
+            localSimModel: null,
+
             // Target configuration
             targetMode: 'relative', // 'relative' (+Δ) or 'absolute' (°C)
             targetValue: 10.0,       // e.g. +10°C relative or 31°C absolute
@@ -1356,8 +1452,10 @@
             const slider = document.getElementById('offset-slider');
             if (slider && state.targetMode === 'relative') {
                 const v = parseFloat(state.targetValue);
-                if (!isNaN(v)) slider.value = String(Math.min(20, Math.max(-10, v)));
+                if (!isNaN(v)) slider.value = String(clampTarget(v, 'relative'));
             }
+
+            renderTargetUnreachable();
 
             // Control loop evaluation
             evaluateControlLoop();
@@ -1388,6 +1486,17 @@
            resets the value to a sensible default for that mode, because +10 Δ°C
            and 10 °C absolute mean very different things. Rendering is delegated
            to renderTargetModeUI so there is a single place that styles it. */
+        /* Says so when the chamber is being asked for something it cannot do:
+           an absolute target below the outdoor air. Relative mode cannot get
+           into this state — its range starts at 0 — so the notice is really
+           about absolute setpoints. */
+        function renderTargetUnreachable() {
+            const el = document.getElementById('target-unreachable');
+            if (!el) return;
+            const unreachable = state.calculatedTargetTemp < state.ambientTemp - 0.3;
+            el.classList.toggle('hidden', !unreachable);
+        }
+
         function setTargetMode(mode) {
             state.targetMode = mode;
             state.targetValue = mode === 'relative' ? 10.0 : 31.0;
@@ -1399,8 +1508,25 @@
             onTargetChanged();
         }
 
+        /* Bounds on the setpoint.
+
+           Relative is 0…10 by design: the offset only goes up, because the only
+           cooling in the chamber is ventilation and ventilation cannot take it
+           below the outdoor air. An offset of +5.5 therefore means the chamber
+           tracks 5.5°C above outside, wherever outside goes.
+
+           Absolute is bounded only by what the security rules accept, so an
+           operator can ask for any temperature — including one below outside,
+           which renderTargetUnreachable() then flags as unreachable. */
+        const TARGET_LIMITS = { relative: [0, 10], absolute: [-40, 80] };
+
+        function clampTarget(value, mode = state.targetMode) {
+            const [lo, hi] = TARGET_LIMITS[mode] || TARGET_LIMITS.absolute;
+            return Math.min(hi, Math.max(lo, value));
+        }
+
         document.getElementById('target-value-input').addEventListener('input', (e) => {
-            state.targetValue = parseFloat(e.target.value) || 0;
+            state.targetValue = clampTarget(parseFloat(e.target.value) || 0);
             onTargetChanged();
         });
 
@@ -1415,8 +1541,7 @@
             const input = document.getElementById('target-value-input');
             function step(d) {
                 if (state.targetMode !== 'relative') setTargetMode('relative');
-                state.targetValue = Math.round((state.targetValue + d) * 2) / 2;
-                state.targetValue = Math.min(20, Math.max(-10, state.targetValue));
+                state.targetValue = clampTarget(Math.round((state.targetValue + d) * 2) / 2);
                 input.value = state.targetValue.toFixed(1);
                 onTargetChanged();
             }
@@ -1424,20 +1549,152 @@
             if (plus) plus.addEventListener('click', () => step(+0.5));
             if (slider) slider.addEventListener('input', (e) => {
                 if (state.targetMode !== 'relative') setTargetMode('relative');
-                state.targetValue = parseFloat(e.target.value) || 0;
+                state.targetValue = clampTarget(parseFloat(e.target.value) || 0);
                 input.value = state.targetValue.toFixed(1);
                 onTargetChanged();
             });
-            document.querySelectorAll('.offset-preset').forEach(btn => {
+            /* [data-offset] on purpose: the ambient demo panel borrows the
+               .offset-preset styling for its own buttons, and without the
+               attribute filter this handler would bind to those too and drive
+               the target from a click meant for the outside temperature. */
+            document.querySelectorAll('.offset-preset[data-offset]').forEach(btn => {
                 btn.addEventListener('click', () => {
-                    const v = parseFloat(btn.getAttribute('data-offset'));
                     if (state.targetMode !== 'relative') setTargetMode('relative');
-                    state.targetValue = v;
-                    input.value = v.toFixed(1);
+                    state.targetValue = clampTarget(parseFloat(btn.getAttribute('data-offset')));
+                    input.value = state.targetValue.toFixed(1);
                     onTargetChanged();
                 });
             });
         })();
+
+        /* ==========================================================================
+           2b. Outside temperature — demo override
+
+           The value travels the same path as any other setpoint:
+           browser -> desired.simAmbient -> controller. The browser never fakes
+           the reading itself, so the "חוץ" tile keeps showing only what the
+           controller published; a second or two after a change it follows,
+           the target is recomputed from it (relative mode), and the heater or
+           the fans come on to close the new gap. Clearing the switch removes
+           the key, and the controller returns to its own probe.
+           ========================================================================== */
+        const AMB_MIN = -40;   // matches isBoundedNumber() in firestore.rules
+        const AMB_MAX = 80;
+
+        let ambPublishTimer = null;
+        function publishSimAmbient() {
+            clearTimeout(ambPublishTimer);
+            ambPublishTimer = setTimeout(() => {
+                ambPublishTimer = null;
+                BackendAdapter.sendCommand('setSimAmbient', { simAmbient: state.simAmbient });
+            }, 600);
+        }
+
+        function renderSimAmbientUI() {
+            const on = typeof state.simAmbient === 'number';
+            const enable = document.getElementById('amb-sim-enable');
+            const controls = document.getElementById('amb-sim-controls');
+            const pill = document.getElementById('amb-sim-pill');
+            const input = document.getElementById('amb-value-input');
+            const slider = document.getElementById('amb-slider');
+
+            if (enable) enable.checked = on;
+            if (controls) controls.classList.toggle('hidden', !on);
+            if (pill) pill.classList.toggle('hidden', !on);
+
+            // Never yank a control the operator is holding.
+            const busy = document.activeElement === input || document.activeElement === slider;
+            if (on && !busy) {
+                if (input) input.value = state.simAmbient.toFixed(1);
+                if (slider) slider.value = String(Math.min(50, Math.max(-10, state.simAmbient)));
+            }
+        }
+
+        function setSimAmbient(value) {
+            const v = parseFloat(value);
+            if (isNaN(v)) return;
+            state.simAmbient = Math.min(AMB_MAX, Math.max(AMB_MIN, v));
+            renderSimAmbientUI();
+            publishSimAmbient();
+        }
+
+        /* Turning the override ON seeds it with the temperature currently
+           reported outside, so nothing jumps at the moment of the switch. */
+        function toggleSimAmbient(on) {
+            state.simAmbient = on
+                ? Math.round((isFinite(state.ambientTemp) ? state.ambientTemp : 21) * 2) / 2
+                : null;
+            renderSimAmbientUI();
+            publishSimAmbient();
+        }
+
+        (function bindAmbientDemoControls() {
+            const enable = document.getElementById('amb-sim-enable');
+            const input = document.getElementById('amb-value-input');
+            const slider = document.getElementById('amb-slider');
+            const minus = document.getElementById('amb-minus');
+            const plus = document.getElementById('amb-plus');
+
+            function step(d) {
+                const base = typeof state.simAmbient === 'number' ? state.simAmbient : state.ambientTemp;
+                setSimAmbient(Math.round((base + d) * 2) / 2);
+                if (input && typeof state.simAmbient === 'number') {
+                    input.value = state.simAmbient.toFixed(1);
+                }
+            }
+
+            if (enable) enable.addEventListener('change', (e) => toggleSimAmbient(e.target.checked));
+            if (input) input.addEventListener('input', (e) => setSimAmbient(e.target.value));
+            if (slider) slider.addEventListener('input', (e) => setSimAmbient(e.target.value));
+            if (minus) minus.addEventListener('click', () => step(-0.5));
+            if (plus) plus.addEventListener('click', () => step(+0.5));
+
+            document.querySelectorAll('.amb-preset').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    setSimAmbient(btn.getAttribute('data-amb'));
+                    if (input && typeof state.simAmbient === 'number') {
+                        input.value = state.simAmbient.toFixed(1);
+                    }
+                });
+            });
+        })();
+
+        /* States, in words, how fast the demo actually moves.
+
+           The figures are formatted from the model that is driving the screen —
+           the controller's own rates when it publishes them, the local
+           simulator's when this browser is the one simulating — so the sentence
+           cannot claim a behaviour the running code does not have. A real
+           controller publishes no simModel and the note disappears. */
+        function renderSimModelNote() {
+            const host = document.getElementById('sim-model-note');
+            const rates = document.getElementById('sim-model-rates');
+            if (!host || !rates) return;
+
+            const m = isLive() ? state.simModel : state.localSimModel;
+            const num = (v) => (typeof v === 'number' && isFinite(v) ? v : null);
+            const rate = m ? num(m.ratePerSecondC) : null;
+
+            if (rate === null) {
+                host.classList.add('hidden');
+                return;
+            }
+            host.classList.remove('hidden');
+
+            const interval = num(m.intervalS);
+            const band = num(m.deadbandC);
+            const lines = [
+                `טמפרטורת פנים התא משתנה ב-<strong>${rate}°C לשנייה</strong> לכיוון היעד (חימום או אוורור), ונעצרת בהגעה אליו.`,
+                'אוורור מחליף אוויר עם החוץ, ולכן אינו יכול לקרר את התא מתחת לטמפרטורת החוץ.'
+            ];
+            if (band !== null) {
+                lines.push(`בתחום של ‎±${band.toFixed(1)}°C מהיעד המערכת נחשבת "בטווח" ואינה מפעילה דבר.`);
+            }
+            if (interval !== null) {
+                lines.push(`הקריאות מתעדכנות כל ${Number.isInteger(interval) ? interval : interval.toFixed(1)} שנ׳.`);
+            }
+            rates.innerHTML = lines.join('<br>');
+        }
 
         const MODE_LABELS = {
             AUTO: 'אוטומטי',
@@ -1671,7 +1928,10 @@
         let heatingElements = [];       // Glowing heating elements and internal lights
         let airflowParticles = null;
         let doorMesh = null;
-        let offlineMarkers = {};
+        let offlineMarkers = {};       // red badge per component key
+        let offlineBeacons = {};       // pulsing red beacon at the component
+        let s0Enclosure = null;        // the outside station's box, reddened on fault
+        let faultPulse = 0;            // drives the alarm pulse in animate3D
 
         /* ======================================================================
            Chamber dimensions, derived from the SolidWorks assembly
@@ -2729,60 +2989,161 @@
            ========================================================================== */
         function makeTextSprite(text, opts) {
             opts = opts || {};
+            const w = opts.w || 256;
+            const h = opts.h || 96;
             const canvas = document.createElement('canvas');
-            canvas.width = 256; canvas.height = 96;
+            canvas.width = w; canvas.height = h;
             const ctx = canvas.getContext('2d');
             const bg = opts.bg || 'rgba(255,255,255,0.92)';
             const fg = opts.fg || '#0f766e';
             const border = opts.border || '#99f6e4';
-            const r = 18;
+            const pad = opts.pad || 6;
+            const bw = opts.borderWidth || 2;
+            const r = opts.radius || 18;
             ctx.fillStyle = border;
             ctx.beginPath();
-            ctx.roundRect(6, 8, 244, 80, r);
+            ctx.roundRect(pad, pad + 2, w - pad * 2, h - (pad + 2) * 2, r);
             ctx.fill();
             ctx.fillStyle = bg;
             ctx.beginPath();
-            ctx.roundRect(8, 10, 240, 76, r - 2);
+            ctx.roundRect(pad + bw, pad + 2 + bw, w - (pad + bw) * 2, h - (pad + 2 + bw) * 2, Math.max(2, r - bw));
             ctx.fill();
             ctx.fillStyle = fg;
-            ctx.font = '700 34px Heebo, Arial, sans-serif';
+            ctx.font = opts.font || '700 34px Heebo, Arial, sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(text, 128, 48);
+            ctx.fillText(text, w / 2, h / 2);
             const tex = new THREE.CanvasTexture(canvas);
+            /* The canvas is already sRGB. Without saying so, the renderer
+               (outputEncoding = sRGB) treats it as linear and encodes it a
+               second time, which is what turned a solid #dc2626 badge into pale
+               pink — the other half of why the offline warnings were hard to
+               see. Guarded because the constant is version-dependent. */
+            if (THREE.sRGBEncoding) tex.encoding = THREE.sRGBEncoding;
             tex.needsUpdate = true;
-            const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
+            /* toneMapped: false — these are labels, not surfaces, and ACES
+               filmic tone mapping desaturates them along with the scene. */
+            const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, toneMapped: false });
+            if (opts.alwaysOnTop) {
+                // An alarm must not be able to hide behind the glazing.
+                mat.depthTest = false;
+            }
             const sprite = new THREE.Sprite(mat);
-            sprite.scale.set(opts.sx || 1.6, opts.sy || 0.6, 1);
+            if (opts.alwaysOnTop) sprite.renderOrder = 999;
+            const sx = opts.sx || 1.6;
+            const sy = opts.sy || 0.6;
+            sprite.scale.set(sx, sy, 1);
+            sprite.userData.baseScale = { x: sx, y: sy };
             return sprite;
         }
 
-        function buildInternalSensors3D() {
-            // S1..S5 sensor probes removed from 3D chamber to match clean CAD model
+        /* A component that has dropped off the bus must be findable ON THE
+           MODEL, not merely labelled somewhere above it. A pale badge is easy
+           to miss on a sunlit scene, so an offline component gets two things:
+           a solid red badge in white type, and a pulsing red beacon sitting at
+           the component itself. Both are driven from state.faults, and both
+           pulse in animate3D so they read as an alarm rather than as part of
+           the machine. */
+        function makeFaultAlertSprite(text) {
+            return makeTextSprite(text, {
+                w: 512, h: 148,
+                bg: '#dc2626', fg: '#ffffff', border: '#7f1d1d',
+                font: '800 52px Heebo, Arial, sans-serif',
+                borderWidth: 7, radius: 26,
+                sx: 4.2, sy: 1.15,
+                alwaysOnTop: true
+            });
+        }
 
-            // Top exhaust fan offline alert marker on Cupola
-            const fanAlertSprite = makeTextSprite('⚠️ תקלת מאוורר (Offline)', { bg: '#fee2e2', fg: '#b91c1c', border: '#ef4444', sx: 2.8, sy: 0.7 });
-            fanAlertSprite.position.set(0, HEX_WALL_H + HEX_ROOF_H + 2.4, 0);
-            fanAlertSprite.visible = false;
-            scene.add(fanAlertSprite);
-            offlineMarkers['topfan'] = fanAlertSprite;
+        function makeFaultBeacon(radius) {
+            const group = new THREE.Group();
+            const core = new THREE.Mesh(
+                new THREE.SphereGeometry(radius, 20, 20),
+                new THREE.MeshStandardMaterial({
+                    color: 0xef4444, emissive: 0xff1414,
+                    emissiveIntensity: 2.6, roughness: 0.35, metalness: 0.0
+                })
+            );
+            const halo = new THREE.Mesh(
+                new THREE.SphereGeometry(radius * 2.2, 20, 20),
+                new THREE.MeshBasicMaterial({
+                    color: 0xff2d2d, transparent: true, opacity: 0.22,
+                    depthWrite: false, toneMapped: false
+                })
+            );
+            const light = new THREE.PointLight(0xff2222, 2.4, 16);
+            group.add(core);
+            group.add(halo);
+            group.add(light);
+            group.visible = false;
+            group.userData.parts = { core, halo, light };
+            return group;
+        }
+
+        /* Registers a marker pair for one component: the badge and the beacon
+           at `position`, both hidden until the fault appears. `badgeY` lifts
+           the badge to its own height — a beacon inside the chamber wants its
+           label up in clear air above the roof, not buried in the glazing. */
+        function addFaultMarker(key, text, position, radius, parent, badgeY) {
+            const host = parent || scene;
+
+            const badge = makeFaultAlertSprite(text);
+            badge.position.copy(position);
+            badge.position.y = typeof badgeY === 'number' ? badgeY : position.y + radius + 1.5;
+            badge.visible = false;
+            host.add(badge);
+            offlineMarkers[key] = badge;
+
+            const beacon = makeFaultBeacon(radius);
+            beacon.position.copy(position);
+            host.add(beacon);
+            offlineBeacons[key] = beacon;
+        }
+
+        function buildInternalSensors3D() {
+            /* S1..S5 sensor probes are deliberately absent from the 3D chamber,
+               to match the clean CAD model. A dropped internal probe therefore
+               has no body to highlight — so S2 gets a beacon at roughly where
+               it sits ("עליון ימין"), which is a marker, not invented CAD. */
+            addFaultMarker('s2', '⚠️ חיישן 2 מנותק',
+                new THREE.Vector3(HEX_R * 0.45, HEX_WALL_H - 1.6, -HEX_R * 0.3), 0.34,
+                null, HEX_WALL_H + HEX_ROOF_H + 1.4);
+
+            // Top exhaust fans on the cupola.
+            addFaultMarker('topfan', '⚠️ תקלת מאוורר עליון',
+                new THREE.Vector3(0, HEX_WALL_H + HEX_ROOF_H + HEX_CUPOLA_H + 0.6, 0), 0.42);
         }
 
         function updateOfflineMarkers3D() {
-            if (offlineMarkers['s2']) offlineMarkers['s2'].visible = state.faults.s2;
-            if (offlineMarkers['topfan']) offlineMarkers['topfan'].visible = state.faults.topfan;
-            if (offlineMarkers['s0']) offlineMarkers['s0'].visible = state.faults.s0;
+            ['s2', 'topfan', 's0'].forEach((key) => {
+                const on = !!state.faults[key];
+                if (offlineMarkers[key]) offlineMarkers[key].visible = on;
+                if (offlineBeacons[key]) offlineBeacons[key].visible = on;
+            });
 
+            // The outside station's own enclosure goes red with it.
+            if (s0Enclosure) {
+                s0Enclosure.material.emissive.setHex(state.faults.s0 ? 0xb91c1c : 0x000000);
+                s0Enclosure.material.emissiveIntensity = state.faults.s0 ? 1.6 : 0;
+            }
+
+            /* The header chip belongs to the heartbeat, not to this function.
+               It used to be overwritten with "מקושר (Online)" on every telemetry
+               frame, which claimed a live controller even when the Pi had been
+               silent for an hour. A component fault is worth shouting about, so
+               it still takes the chip over — but only while it lasts. */
             const anyFault = state.faults.s2 || state.faults.topfan || state.faults.s0;
             const piStatus = document.getElementById('header-pi-status');
-            if (piStatus) {
-                if (anyFault) {
-                    piStatus.className = "text-amber-700 font-bold";
-                    piStatus.innerText = "התרעת רכיב מנותק!";
-                } else {
-                    piStatus.className = "text-emerald-700 font-bold";
-                    piStatus.innerText = "מקושר (Online)";
-                }
+            if (!piStatus) return;
+            if (anyFault) {
+                piStatus.className = 'font-bold animate-pulse';
+                // Inline, because setPiOnline() sets an inline colour of its
+                // own and an inline style would beat a class.
+                piStatus.style.color = '#b91c1c';
+                piStatus.innerText = 'רכיב מנותק!';
+            } else {
+                piStatus.className = '';
+                setPiOnline(state.piOnline, lastPiDetail);
             }
         }
 
@@ -2847,16 +3208,16 @@
             const s0Box = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.7, 0.45), new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.2, roughness: 0.5 }));
             s0Box.position.y = 5.5;
             s0Group.add(s0Box);
+            s0Enclosure = s0Box;
 
             const extSprite = makeTextSprite('חיישן חוץ  S0', { bg: 'rgba(255,251,235,0.96)', fg: '#92400e', border: '#fde68a', sx: 2.4, sy: 0.65 });
             extSprite.position.set(0, 6.6, 0);
             s0Group.add(extSprite);
 
-            const extAlertSprite = makeTextSprite('⚠️ אין תקשורת (Offline)', { bg: '#fee2e2', fg: '#b91c1c', border: '#ef4444', sx: 2.6, sy: 0.7 });
-            extAlertSprite.position.set(0, 7.4, 0);
-            extAlertSprite.visible = false;
-            s0Group.add(extAlertSprite);
-            offlineMarkers['s0'] = extAlertSprite;
+            // Badge + beacon on the station itself, same treatment as the
+            // chamber's own components.
+            addFaultMarker('s0', '⚠️ חיישן חוץ מנותק',
+                new THREE.Vector3(0, 5.5, 0), 0.36, s0Group);
 
             scene.add(s0Group);
         }
@@ -2915,10 +3276,19 @@
            pushes pixels towards white instead of orange — measured warm
            coverage was 0.02%, i.e. invisible. Plain alpha blending with a
            saturated red-orange measures 4.3%, over 200x better. `size` is in
-           world units, so it also had to grow substantially to register. */
+           world units, so it also had to grow substantially to register.
+
+           MEASURED AGAIN (2026-09-08) because ventilation was far fainter than
+           heating on screen — and it was: with the same "distinctly coloured
+           pixel" test, the heat stream covered 2.03% of the frame and the cool
+           stream only 0.35%, about six times weaker. Its dots were half the
+           size of the warm ones and its blue was light enough to be lost
+           against a pale sky and the glazing. A deeper, more saturated blue at
+           the warm stream's dot size measures ~3.0%, so ventilation now reads
+           at least as strongly as heating. */
         const AIRFLOW_LOOKS = {
             heat: { color: 0xd92b06, size: 1.20 },
-            cool: { color: 0x0e7fd4, size: 0.70 }
+            cool: { color: 0x0b4fd4, size: 1.40 }
         };
 
         let airflowLook = null;
@@ -3014,7 +3384,11 @@
                     airflowParticles.geometry.attributes.position.needsUpdate = true;
                 } else if (isVenting) {
                     setAirflowLook('cool');
-                    airflowParticles.material.opacity = state.fanTopSpeed * 0.8;
+                    /* Same opacity curve as the warm stream (0.35 + duty*0.6):
+                       the old `duty * 0.8` faded the stream almost to nothing
+                       while the fans were spinning up, which is exactly when an
+                       operator is looking for it. */
+                    airflowParticles.material.opacity = 0.40 + state.fanTopSpeed * 0.55;
 
                     /* Ventilation is a THROUGH-FLOW: the wall fans draw outside
                        air in at deck height and the roof cupola exhausts it, so
@@ -3028,6 +3402,31 @@
                     airflowParticles.material.opacity = 0;
                 }
             }
+
+            /* 7. Fault alarms: a beacon that does not move is scenery, so the
+                  beacons breathe and the badges throb slightly. Only visible
+                  ones are touched — with no faults this costs two empty loops. */
+            faultPulse += 0.05;
+            const alarm = 0.5 + 0.5 * Math.sin(faultPulse * 3.2);
+
+            Object.keys(offlineBeacons).forEach((key) => {
+                const beacon = offlineBeacons[key];
+                if (!beacon || !beacon.visible) return;
+                const p = beacon.userData.parts;
+                p.core.material.emissiveIntensity = 1.6 + alarm * 2.8;
+                p.halo.material.opacity = 0.12 + alarm * 0.28;
+                p.halo.scale.setScalar(1 + alarm * 0.38);
+                p.light.intensity = 1.2 + alarm * 3.4;
+            });
+
+            Object.keys(offlineMarkers).forEach((key) => {
+                const badge = offlineMarkers[key];
+                if (!badge || !badge.visible) return;
+                const base = badge.userData.baseScale;
+                if (!base) return;
+                const grow = 1 + alarm * 0.09;
+                badge.scale.set(base.x * grow, base.y * grow, 1);
+            });
 
             // Update UI Badges & HUD Telemetry
             updateUIBadges();
@@ -3269,6 +3668,7 @@
 
             ['s2', 's0', 'topfan'].forEach(renderFaultIndicator);
             renderSensorRows(state.sensorCount, state.sensorLabels);
+            renderSimModelNote();   // the model in charge just changed
             renderSourceBanner();
         }
 
@@ -3342,6 +3742,15 @@
             state.targetShutterBottom = num(reported.shutterBottomOpen);
             state.targetHeater = num(reported.heaterIntensity);
 
+            /* A controller that is simulating says so, and publishes the rates
+               it is simulating with. Hardware reports neither, which is exactly
+               how the demo note knows to disappear. */
+            state.simModel = (reported.simulated && reported.simModel
+                              && typeof reported.simModel === 'object')
+                ? reported.simModel
+                : null;
+            renderSimModelNote();
+
             if (reported.mode) applyReportedMode(reported.mode);
             updateCalculations();
         }
@@ -3351,6 +3760,17 @@
         function applyDesired(desired) {
             if (!desired) return;
             state.desiredMode = desired.mode || state.desiredMode;
+
+            /* Ambient override, mirrored in from whoever set it last — unless a
+               write of our own is still queued, in which case the snapshot we
+               are looking at is older than what the operator just asked for. */
+            if (!ambPublishTimer) {
+                const incoming = typeof desired.simAmbient === 'number' ? desired.simAmbient : null;
+                if (incoming !== state.simAmbient) {
+                    state.simAmbient = incoming;
+                    renderSimAmbientUI();
+                }
+            }
 
             const valInput = document.getElementById('target-value-input');
             const slider = document.getElementById('offset-slider');
@@ -3362,8 +3782,14 @@
                 renderTargetModeUI(desired.targetMode);
             }
             if (typeof desired.targetValue === 'number') {
-                state.targetValue = desired.targetValue;
-                if (valInput) valInput.value = desired.targetValue.toFixed(1);
+                state.targetValue = clampTarget(desired.targetValue);
+                if (valInput) valInput.value = state.targetValue.toFixed(1);
+
+                /* A stored offset from outside the current range — a negative
+                   one saved before the relative mode became 0…10 — is not
+                   attainable. Correct it once rather than showing the operator
+                   a setpoint the chamber can never meet. */
+                if (state.targetValue !== desired.targetValue) publishTarget();
             }
             updateCalculations();
         }
@@ -3387,12 +3813,29 @@
             if (lbl) lbl.innerText = relative ? 'הפרש מהסביבה' : 'טמפרטורת יעד';
             if (unit) unit.innerText = relative ? 'Δ°C' : '°C';
             if (extras) extras.classList.toggle('hidden', !relative);
+
+            // The two modes accept different ranges, so the field's own bounds
+            // have to follow it — otherwise the browser's spinner and validation
+            // would contradict clampTarget().
+            const valInput = document.getElementById('target-value-input');
+            if (valInput) {
+                const [lo, hi] = TARGET_LIMITS[relative ? 'relative' : 'absolute'];
+                valInput.min = String(lo);
+                valInput.max = String(hi);
+            }
         }
 
-        /* Header connectivity chips. */
+        /* Header connectivity chips.
+
+           `lastPiDetail` is remembered so updateOfflineMarkers3D() can hand the
+           chip back to the heartbeat once a component fault clears, instead of
+           inventing a status of its own. */
+        let lastPiDetail = null;
+
         function setPiOnline(online, detail) {
             const changed = state.piOnline !== online;
             state.piOnline = online;
+            lastPiDetail = detail || lastPiDetail;
 
             // The pending badge is worded off connectivity, so re-paint it when
             // the controller comes or goes with a setpoint still unconfirmed.
@@ -3452,9 +3895,9 @@
          the classic script above has defined window.ChamberUI.
          ====================================================================== -->
     <script type="module">
-        import { requireApprovedUser, signOutAndRedirect, renderBlockingScreen } from './js/auth-guard.js?v=20260906a';
-        import { attachChamber, listChamberTabs } from './js/chamber-store.js?v=20260906a';
-        import { createSimulator } from './js/simulator.js?v=20260906a';
+        import { requireApprovedUser, signOutAndRedirect, renderBlockingScreen } from './js/auth-guard.js?v=20260908b';
+        import { attachChamber, listChamberTabs } from './js/chamber-store.js?v=20260908b';
+        import { createSimulator } from './js/simulator.js?v=20260908b';
 
         document.getElementById('btn-signout').onclick = () => signOutAndRedirect();
 
