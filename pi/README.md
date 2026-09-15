@@ -175,12 +175,78 @@ The tach wire gives real speed feedback, which is what lets the agent report
 *"the fan was commanded on and is not turning"* — exactly the failure a climate
 chamber has to catch.
 
-### The chamber's real actuators
+### Relay modules — read this before wiring a heater
 
-Not a MOSFET. Use an opto-isolated relay module for 12/24 V, or an SSR for
-mains, and do not PWM a mains fan. `HEATER_GPIO` drives its pin at 1 Hz for
-exactly this reason: a mains SSR switches at zero crossing, so anything faster
-is meaningless to it.
+Two settings, both explicit because guessing either one damages hardware.
+
+```bash
+# the common blue opto-isolated relay board (SRD-05VDC-SL-C)
+FAN_GPIO=18 HEATER_GPIO=23 sudo bash setup.sh
+```
+
+**`*_TYPE` (default `relay`).** A mechanical relay must never be given a PWM
+signal. At 1 Hz that is 86,400 operations a day against a typical rating of
+100,000 *mechanical* operations — dead in a day and a half. `relay` drives a
+plain on/off output; `MIN_ON_S` / `MIN_OFF_S` in `control.py` protect it
+further. Use `pwm` only for something that actually modulates: a 4-wire fan's
+PWM input, a logic-level MOSFET, or a **solid-state** relay, which has nothing
+to wear out and is happy at 1 Hz.
+
+```bash
+HEATER_TYPE=pwm    # only if the heater is on an SSR
+```
+
+**`*_ACTIVE_LOW` (default `true`).** Most cheap relay boards energise the coil
+when the input is pulled **LOW**. The default is `true` because that is what
+those boards do and because being wrong in that direction fails safe — a board
+that is really active-HIGH simply never switches, which you notice at once and
+harmlessly. Being wrong the other way leaves a heater energised.
+
+```bash
+HEATER_ACTIVE_LOW=0    # only if your board is documented active-HIGH
+```
+
+#### Verify the polarity in 30 seconds, with the mains side disconnected
+
+Take the load off the relay's screw terminals first. Then listen for the click:
+
+```bash
+python3 -c "
+from gpiozero import OutputDevice
+from time import sleep
+r = OutputDevice(23, active_high=False, initial_value=False)
+print('should be OFF now — no click, LED off'); sleep(3)
+print('ON');  r.on();  sleep(3)
+print('OFF'); r.off(); sleep(1)
+"
+```
+
+If the relay is already clicked-in at the first line, your board is
+active-HIGH: re-run `setup.sh` with `HEATER_ACTIVE_LOW=0`.
+
+#### The gap software cannot close
+
+`initial_value=False` releases the coil the instant the device is constructed —
+but that line only runs once the agent starts. From power-on until then, the
+pin is a **floating input**, and on an active-low board a floating input can
+read LOW and pull the relay in. That is a heater switched on for ~30 seconds
+on every boot.
+
+Only hardware fixes it: a **10 kΩ pull-UP to 3.3 V** on the signal line of an
+active-low board. (Note this is the opposite of the pull-DOWN a MOSFET needs —
+the resistor always goes to whichever rail means *off* for your part.)
+
+And regardless: a real heater needs a mechanical over-temperature thermostat
+wired in series with it. `MAX_INSIDE_C` is a backstop, not the protection.
+
+#### Other relay-board wiring notes
+
+* **JD-VCC jumper.** Leaving it fitted powers the coils from the Pi's 5V,
+  which defeats the opto-isolation you paid for. Remove it and feed JD-VCC from
+  a separate 5V supply, grounds commoned, if the board supports it.
+* **Coil current.** ~70–90 mA per relay. That is the module's own transistor's
+  job, never the GPIO pin's — which is why you use a module and not a bare relay.
+* **Do not PWM a mains fan**, whatever is switching it.
 
 ## The chamber id
 

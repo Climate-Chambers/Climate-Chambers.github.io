@@ -38,6 +38,44 @@ FAN_GPIO = os.environ.get("FAN_GPIO")
 HEATER_GPIO = os.environ.get("HEATER_GPIO")
 FAN_PWM_HZ = int(os.environ.get("FAN_PWM_HZ", "25000"))   # 25 kHz: the 4-wire fan standard
 
+
+def _flag(name, default=False):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in ("1", "true", "yes", "on")
+
+
+# ---------------------------------------------------------------------------
+# How each output is driven. Getting this wrong damages hardware, so both
+# settings are explicit rather than guessed.
+#
+# TYPE — "relay" (default) or "pwm".
+#
+#   A mechanical relay MUST NOT be given a PWM signal. At 1 Hz it would be
+#   switched 86,400 times a day against a typical rating of 100,000 mechanical
+#   operations: dead in a day and a half. Relays get a plain on/off output and
+#   are protected further by MIN_ON_S / MIN_OFF_S in control.py.
+#
+#   Use "pwm" only for something that actually modulates: a 4-wire fan's PWM
+#   input, a logic-level MOSFET, or a solid-state relay (an SSR has no moving
+#   parts and is happy at 1 Hz, which is what slow-PWM heat control needs).
+#
+# ACTIVE_LOW — true for most of the cheap opto-isolated relay boards, where
+#   the coil energises when the input is pulled LOW. Default true because that
+#   is what the common blue SRD-05VDC modules do, and because being wrong in
+#   this direction fails safe: a board that is really active-HIGH simply never
+#   switches on, which you notice immediately and harmlessly. Being wrong the
+#   other way leaves a heater energised.
+#
+#   VERIFY IT ANYWAY, with the mains side disconnected — see pi/README.md.
+# ---------------------------------------------------------------------------
+
+FAN_TYPE = (os.environ.get("FAN_TYPE") or "relay").strip().lower()
+HEATER_TYPE = (os.environ.get("HEATER_TYPE") or "relay").strip().lower()
+FAN_ACTIVE_LOW = _flag("FAN_ACTIVE_LOW", True)
+HEATER_ACTIVE_LOW = _flag("HEATER_ACTIVE_LOW", True)
+
 SENSOR_COUNT = int(os.environ.get("SENSOR_COUNT", "5"))
 SENSOR_LABELS = ["עליון שמאל", "עליון ימין", "מרכז התא", "תחתון שמאל", "תחתון ימין"]
 
@@ -74,14 +112,15 @@ class Hardware:
 
         if FAN_GPIO or HEATER_GPIO:
             try:
-                from gpiozero import PWMOutputDevice
                 if FAN_GPIO:
-                    self._pins["fan"] = PWMOutputDevice(int(FAN_GPIO), frequency=FAN_PWM_HZ)
+                    self._pins["fan"] = self._open(
+                        "fan", int(FAN_GPIO), FAN_TYPE, FAN_ACTIVE_LOW, FAN_PWM_HZ)
                 if HEATER_GPIO:
-                    # Slow PWM for a solid-state relay: a mains SSR switches at
-                    # zero crossing, so anything faster than a few hertz is
-                    # meaningless to it.
-                    self._pins["heater"] = PWMOutputDevice(int(HEATER_GPIO), frequency=1)
+                    # 1 Hz slow-PWM is for an SSR, which switches at zero
+                    # crossing and has nothing to wear out. A mechanical relay
+                    # must never get here — see _open().
+                    self._pins["heater"] = self._open(
+                        "heater", int(HEATER_GPIO), HEATER_TYPE, HEATER_ACTIVE_LOW, 1)
                 self.backend = "REAL"
             except Exception as exc:        # noqa: BLE001 — never block startup on wiring
                 print(f"hardware: falling back to simulation ({exc})")
@@ -90,6 +129,37 @@ class Hardware:
         # Simulated chamber state, used only by the SIMULATED backend.
         self._inside_c = AMBIENT_C
         self._ambient_c = AMBIENT_C
+
+    @staticmethod
+    def _open(name, pin, kind, active_low, hz):
+        """Open one output, refusing the combination that destroys hardware.
+
+        `initial_value=False` is the whole safety argument here: gpiozero
+        drives the pin to the inactive level the instant the device is
+        constructed, so an active-low relay board is pushed HIGH — coil
+        released — before anything else happens.
+
+        It cannot help before this line runs, though. From power-on until the
+        agent starts, the pin is a floating input, and a floating input on an
+        active-low board may read LOW and energise the relay. Only a physical
+        10 kΩ pull-UP to 3.3V fixes that. Software cannot.
+        """
+        from gpiozero import OutputDevice, PWMOutputDevice
+
+        if kind == "pwm":
+            dev = PWMOutputDevice(pin, active_high=not active_low,
+                                  initial_value=0.0, frequency=hz)
+        elif kind == "relay":
+            dev = OutputDevice(pin, active_high=not active_low,
+                               initial_value=False)
+        else:
+            raise ValueError(
+                f"{name.upper()}_TYPE={kind!r} is not understood; use 'relay' or 'pwm'")
+
+        print(f"hardware: {name} on GPIO{pin} as {kind}, "
+              f"active-{'LOW' if active_low else 'HIGH'}"
+              + (f", {hz} Hz" if kind == "pwm" else ""))
+        return dev
 
     # ---- sensors ---------------------------------------------------------
 
@@ -130,8 +200,13 @@ class Hardware:
         for name, value in (("fan", fan), ("heater", heater)):
             self._outputs[name] = value
             pin = self._pins.get(name)
-            if pin is not None:
-                pin.value = value
+            if pin is None:
+                continue
+            # A relay is on or off; handing it a fraction would silently round
+            # and make the reported state a lie. `active_high` set at open time
+            # is what maps this to the right electrical level, so nothing here
+            # needs to know the board's polarity.
+            pin.value = value if hasattr(pin, "frequency") else bool(value >= 0.5)
 
         if self.backend == "SIMULATED":
             self._simulate(decision, dt_s)
@@ -193,7 +268,7 @@ class Hardware:
         """
         for name, pin in self._pins.items():
             try:
-                pin.value = 0.0
+                pin.off()           # inactive level, whatever the polarity
                 pin.close()
             except Exception:       # noqa: BLE001 — shutdown must not raise
                 pass
