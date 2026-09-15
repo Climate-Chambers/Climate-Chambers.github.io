@@ -1,0 +1,6 @@
+# No third-party dependencies.
+#
+# Both pi_connect.py and chamber_agent.py talk to Firebase over its REST API
+# using nothing but the Python 3 standard library, so there is no venv to
+# create and no wheel to build on the Pi. This file is kept only to make that
+# explicit — `pip install -r requirements.txt` is a no-op.

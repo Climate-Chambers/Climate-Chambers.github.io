@@ -1338,6 +1338,14 @@
                 s0: false
             },
 
+            /* Diagnostics inputs published by the agent (pi/chamber.py). They
+               are read ONLY together with state.piOnline: while the controller
+               is unreachable every one of them is a stale snapshot, and the
+               diagnostics panel says "unknown" rather than quoting them. */
+            reportedFault: '',      // reported.fault — '' when the controller is healthy
+            setpointAgeS: -1,       // reported.setpointAgeS — -1 = never confirmed
+            fanControlled: true,    // reported.fanControlled — false = wired to 5V, not commandable
+
             /* ---- Multi-chamber / Firestore additions ---------------------
                source: 'live'  -> telemetry and actuator state come from the
                                   Raspberry Pi via Firestore; this browser is
@@ -1812,28 +1820,128 @@
             updateOfflineMarkers3D();
         }
 
+        /* Three states, not two — and the third is the important one.
+
+           A sensor fault and a network fault are different facts about the
+           world and demand different actions: one means drive to the chamber
+           and reseat a probe, the other means the readings on screen are
+           simply old. Collapsing them is how an operator ends up trusting a
+           green dot that has not been updated since yesterday.
+
+             'ok'      the controller answered, and the component answered it
+             'fault'   the controller answered, and the component did NOT
+             'unknown' the controller did not answer, so we know nothing
+
+           `state.faults` alone cannot express 'unknown': when the Pi stops
+           publishing, applySensorHealth() stops being called and those flags
+           freeze at whatever they were — almost always false. Reading them
+           without checking state.piOnline first is the bug this replaces. */
+        function componentHealth(comp) {
+            if (!isLive()) return state.faults[comp] ? 'fault' : 'ok';
+            if (!state.piOnline) return 'unknown';
+            return state.faults[comp] ? 'fault' : 'ok';
+        }
+
+        const DIAG_DOT = {
+            ok:      'w-2.5 h-2.5 rounded-full bg-emerald-500',
+            fault:   'w-2.5 h-2.5 rounded-full bg-red-500 animate-ping',
+            unknown: 'w-2.5 h-2.5 rounded-full bg-slate-300 border border-slate-400'
+        };
+
+        const DIAG_BADGE = {
+            ok:      { cls: 'bg-emerald-50 text-emerald-700 border border-emerald-200', text: 'מקושר ומתפקד' },
+            fault:   { cls: 'bg-red-600 text-white shadow-sm',                          text: 'תקלת חיישן — אינו מגיב' },
+            unknown: { cls: 'bg-slate-100 text-slate-500 border border-slate-300',      text: 'לא ידוע — אין קשר לבקר' }
+        };
+
         function renderFaultIndicator(comp) {
-            const isFault = state.faults[comp];
             const btn = document.getElementById(`diag-btn-${comp}`);
             const dot = document.getElementById(`diag-dot-${comp}`);
             if (!btn || !dot) return;
 
-            dot.className = isFault
-                ? 'w-2.5 h-2.5 rounded-full bg-red-500 animate-ping'
-                : 'w-2.5 h-2.5 rounded-full bg-emerald-500';
+            const health = componentHealth(comp);
+            dot.className = DIAG_DOT[health];
 
             if (isLive()) {
                 // Read-only reflection of real hardware status.
-                btn.className = 'px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed';
-                btn.innerText = isFault ? 'מנותק (מהבקר)' : 'מקושר (מהבקר)';
+                let badge = DIAG_BADGE[health];
+                /* A fan wired straight to the 5V rail (pins 4/6) spins whenever
+                   the Pi has power and no code can stop it. Reporting that as
+                   "מקושר ומתפקד" would imply the controller commands it. */
+                if (comp === 'topfan' && health === 'ok' && !state.fanControlled) {
+                    badge = { cls: 'bg-sky-50 text-sky-700 border border-sky-200',
+                              text: 'פועל תמיד — אינו נשלט' };
+                }
+                btn.className = 'px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-not-allowed ' + badge.cls;
+                btn.innerText = badge.text;
                 btn.disabled = true;
             } else {
+                const isFault = health === 'fault';
                 btn.disabled = false;
                 btn.className = isFault
                     ? 'px-2.5 py-1 rounded-lg text-[11px] font-bold bg-red-600 text-white shadow-sm transition'
                     : 'px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-200 text-slate-700 hover:bg-slate-300 transition';
                 btn.innerText = isFault ? 'החזר תקשורת (Online)' : 'דמה נתק תקשורת';
             }
+        }
+
+        /* The sentence at the top of the diagnostics panel. It has to say which
+           of the two failures is happening, because the operator's next move
+           differs completely between them. */
+        function renderDiagNote() {
+            const note = document.getElementById('diag-note');
+            if (!note) return;
+
+            if (!isLive()) {
+                note.className = 'text-xs text-slate-500 mb-4';
+                note.innerHTML = 'מצב סימולציה מקומי: באפשרותך לדמות נתק תקשורת ברכיב כדי לראות '
+                    + 'סמני שגיאה בתצוגת התלת-ממד ובלוח הבקרה.';
+                return;
+            }
+
+            if (!state.piOnline) {
+                // The network fault. Say plainly that autonomy continues and
+                // that we cannot verify it — claiming either more or less than
+                // that would be a lie.
+                const age = (typeof state.setpointAgeS === 'number' && state.setpointAgeS >= 0)
+                    ? ` נקודת העבודה האחרונה שאושרה לבקר היא מלפני ${agoText(state.setpointAgeS)}.`
+                    : '';
+                note.className = 'text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2.5 mb-4';
+                note.innerHTML = '<i class="fa-solid fa-plug-circle-xmark"></i> <strong>אין חיבור לבקר.</strong> '
+                    + 'לא ניתן לנטר את מצב החיישנים — הנתונים המוצגים הם האחרונים שהתקבלו ואינם מעודכנים. '
+                    + '<strong>הבקרה בתא ממשיכה לפעול אוטונומית גם ללא רשת</strong>, אך לא ניתן לאמת זאת מכאן '
+                    + 'עד שהקשר יחזור.' + age;
+                return;
+            }
+
+            // Controller answering. Now a red dot really does mean a sensor.
+            const faulted = ['s2', 's0'].filter(c => componentHealth(c) === 'fault').length;
+            if (state.reportedFault) {
+                note.className = 'text-xs text-red-800 bg-red-50 border border-red-200 rounded-lg p-2.5 mb-4';
+                note.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> <strong>הבקר מדווח על תקלה:</strong> '
+                    + escapeHtmlUI(state.reportedFault) + ' — המפעילים הופסקו.';
+            } else if (faulted) {
+                note.className = 'text-xs text-red-800 bg-red-50 border border-red-200 rounded-lg p-2.5 mb-4';
+                note.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> <strong>תקלת חיישן.</strong> `
+                    + `הבקר מקושר ומשיב, אך ${faulted === 1 ? 'חיישן אחד אינו מגיב' : `${faulted} חיישנים אינם מגיבים`} — `
+                    + 'יש לבדוק את החיווט או את החיישן עצמו.';
+            } else {
+                note.className = 'text-xs text-slate-500 mb-4';
+                note.innerHTML = 'מצב הרכיבים מתקבל בזמן אמת מבקר ה-Raspberry Pi דרך Firestore. '
+                    + 'לא ניתן לדמות נתק כאשר קיים בקר פעיל.';
+            }
+        }
+
+        function agoText(seconds) {
+            if (seconds < 90) return `${Math.round(seconds)} שניות`;
+            if (seconds < 5400) return `${Math.round(seconds / 60)} דקות`;
+            if (seconds < 172800) return `${Math.round(seconds / 3600)} שעות`;
+            return `${Math.round(seconds / 86400)} ימים`;
+        }
+
+        function renderDiagnostics() {
+            ['s2', 's0', 'topfan'].forEach(renderFaultIndicator);
+            renderDiagNote();
         }
 
         /* Applies real sensor-health flags from telemetry onto the existing
@@ -1845,7 +1953,7 @@
             state.faults.s0 = !!(telemetry && telemetry.ambient && telemetry.ambient.online === false);
             // No per-fan health field yet; the Pi reports actuator faults via
             // reported.* once that is wired on the hardware side.
-            ['s2', 's0', 'topfan'].forEach(renderFaultIndicator);
+            renderDiagnostics();
             updateOfflineMarkers3D();
         }
 
@@ -3116,7 +3224,11 @@
 
         function updateOfflineMarkers3D() {
             ['s2', 'topfan', 's0'].forEach((key) => {
-                const on = !!state.faults[key];
+                /* componentHealth, not state.faults: a stale flag left over
+                   from before the controller dropped off must not keep an
+                   alarm marker burning on the 3D model as though it were a
+                   live reading. Unknown shows nothing; the panel explains. */
+                const on = componentHealth(key) === 'fault';
                 if (offlineMarkers[key]) offlineMarkers[key].visible = on;
                 if (offlineBeacons[key]) offlineBeacons[key].visible = on;
             });
@@ -3659,14 +3771,7 @@
             const rand = document.getElementById('btn-randomize');
             if (rand) rand.classList.toggle('hidden', live);
 
-            const note = document.getElementById('diag-note');
-            if (note) {
-                note.innerText = live
-                    ? 'מצב הרכיבים מתקבל בזמן אמת מבקר ה-Raspberry Pi דרך Firestore. לא ניתן לדמות נתק כאשר קיים בקר פעיל.'
-                    : 'מצב סימולציה מקומי: באפשרותך לדמות נתק תקשורת ברכיב כדי לראות סמני שגיאה בתצוגת התלת-ממד ובלוח הבקרה.';
-            }
-
-            ['s2', 's0', 'topfan'].forEach(renderFaultIndicator);
+            renderDiagnostics();
             renderSensorRows(state.sensorCount, state.sensorLabels);
             renderSimModelNote();   // the model in charge just changed
             renderSourceBanner();
@@ -3741,6 +3846,15 @@
             state.targetShutterTop = num(reported.shutterTopOpen);
             state.targetShutterBottom = num(reported.shutterBottomOpen);
             state.targetHeater = num(reported.heaterIntensity);
+
+            /* Diagnostics, straight from the agent. `fault` is the controller's
+               own verdict — a dead probe or the over-temperature latch — and it
+               outranks anything inferred here, because the controller is the
+               only party that can see the chamber. */
+            state.reportedFault = typeof reported.fault === 'string' ? reported.fault : '';
+            state.setpointAgeS = typeof reported.setpointAgeS === 'number' ? reported.setpointAgeS : -1;
+            state.fanControlled = reported.fanControlled !== false;
+            renderDiagnostics();
 
             /* A controller that is simulating says so, and publishes the rates
                it is simulating with. Hardware reports neither, which is exactly
@@ -3850,6 +3964,11 @@
                 label.innerText = online ? 'מקושר' : (detail || 'מנותק');
                 label.style.color = online ? '#0b7057' : '#b91c1c';
             }
+            /* Losing the controller changes what every component dot MEANS, so
+               the panel has to be repainted here. Nothing else will do it: when
+               the Pi stops publishing, no telemetry arrives to trigger a
+               render, which is precisely how the dots used to stay green. */
+            renderDiagnostics();
             renderSourceBanner();
         }
 
@@ -3895,9 +4014,9 @@
          the classic script above has defined window.ChamberUI.
          ====================================================================== -->
     <script type="module">
-        import { requireApprovedUser, signOutAndRedirect, renderBlockingScreen } from './js/auth-guard.js?v=20260908b';
-        import { attachChamber, listChamberTabs } from './js/chamber-store.js?v=20260908b';
-        import { createSimulator } from './js/simulator.js?v=20260908b';
+        import { requireApprovedUser, signOutAndRedirect, renderBlockingScreen } from './js/auth-guard.js?v=20260915a';
+        import { attachChamber, listChamberTabs } from './js/chamber-store.js?v=20260915a';
+        import { createSimulator } from './js/simulator.js?v=20260915a';
 
         document.getElementById('btn-signout').onclick = () => signOutAndRedirect();
 

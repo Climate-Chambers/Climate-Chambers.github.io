@@ -8,13 +8,13 @@
    chamber data, nor overwrite it.
 
    The real equivalent of this loop lives on the Raspberry Pi
-   (pi/chamber_agent.py) and in tools/virtual-pi.mjs.
+   (pi/control.py, driven by pi/chamber.py) and in tools/virtual-pi.mjs.
    ========================================================================== */
 
 const TICK_MS = 2500;
 
 /* The demo's dynamics, and the one place they are written down: half a degree
-   a second toward the target, exactly like pi/pi_connect.py. The dashboard
+   a second toward the target, exactly like pi/hardware.py. The dashboard
    states these figures to the operator (renderSimModelNote in chamber.html),
    which only stays true if the text is generated from the same constants the
    loop below applies — so keep them here, not there. */
@@ -41,7 +41,7 @@ export function createSimulator(ui) {
        real Pi has. */
     function tick() {
         /* Outdoors: the operator's demo override when one is set, otherwise a
-           slow drift, mirroring virtual-pi.mjs / pi_connect.py. Honouring the
+           slow drift, mirroring virtual-pi.mjs / pi/hardware.py. Honouring the
            override here as well means the same demo works whether or not a
            controller is connected. */
         if (typeof state.simAmbient === 'number') {

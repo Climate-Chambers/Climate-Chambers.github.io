@@ -58,16 +58,81 @@
             <i class="fa-solid fa-circle-notch fa-spin text-3xl text-slate-300 mb-3"></i>
             <p class="text-sm font-bold text-slate-700 mb-1">טוען תאי אקלים…</p>
         </div>
+
+        <!-- Adding a chamber.
+
+             There is nothing to install on the machine you are reading this
+             from. A chamber registers ITSELF: the Pi runs one command, signs
+             in anonymously and creates its own document. This panel exists
+             only to hand you that command with the right address already in
+             it — which is why the URL below is built from location.href at
+             runtime and never hardcoded. The same page works unchanged on
+             GitHub Pages (including a /repo/ subpath), on a custom domain and
+             on localhost, and a copied-out constant would be wrong on two of
+             those three. -->
+        <section id="add-chamber-panel"
+                 class="hidden mt-6 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <button id="btn-add-chamber"
+                    class="w-full flex items-center justify-between gap-3 px-5 py-4 hover:bg-slate-50 transition text-right">
+                <span class="flex items-center gap-2.5">
+                    <span class="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700">
+                        <i class="fa-solid fa-plus"></i>
+                    </span>
+                    <span>
+                        <span class="block text-sm font-extrabold text-slate-900">
+                            הוספת תא אקלים חדש
+                            <span class="align-middle mr-1.5 text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold border border-emerald-200">
+                                <i class="fa-solid fa-user-shield"></i> ADMIN
+                            </span>
+                        </span>
+                        <span class="block text-xs text-slate-500 font-medium">פקודה אחת על ה-Raspberry Pi. אין מה להתקין מכאן.</span>
+                    </span>
+                </span>
+                <i id="add-chamber-chevron" class="fa-solid fa-chevron-down text-slate-400 transition-transform"></i>
+            </button>
+
+            <div id="add-chamber-body" class="hidden px-5 pb-5 border-t border-slate-200 pt-4">
+                <p class="text-[11px] text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5 mb-4 leading-relaxed">
+                    <i class="fa-solid fa-user-shield"></i>
+                    <strong>הוגדרת כ-ADMIN.</strong> לכן אתה רואה את החלק הזה — יש לך הרשאה
+                    להתקין תאי אקלים חדשים, בנוסף לצפייה ולבקרה שיש לכל המשתמשים.
+                    משתמשים אחרים אינם רואים אותו כלל.
+                </p>
+                <ol class="text-xs text-slate-600 space-y-1.5 mb-4 list-decimal pr-4 font-medium">
+                    <li>חבר את ה-Raspberry Pi לחשמל ולרשת, והתחבר אליו ב-SSH.</li>
+                    <li>הדבק את הפקודה הבאה. היא תשאל אותך בשם התא ותמשיך לבד.</li>
+                    <li>התא יופיע ברשימה הזו תוך כדקה, ויעלה מעצמו אחרי כל אתחול.</li>
+                </ol>
+
+                <div class="relative">
+                    <pre id="add-chamber-cmd" dir="ltr"
+                         class="bg-slate-900 text-slate-100 text-[11px] leading-relaxed rounded-xl p-4 pl-24 overflow-x-auto font-mono whitespace-pre-wrap break-all"></pre>
+                    <button id="btn-copy-cmd"
+                            class="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-100 text-[11px] font-bold transition">
+                        <i class="fa-regular fa-copy"></i> העתק
+                    </button>
+                </div>
+
+                <p class="text-[11px] text-slate-500 mt-3 leading-relaxed">
+                    הפקודה מורידה את הסוכן מהאתר הזה, מתקינה אותו כשירות שעולה באתחול,
+                    ומפעילה את ה-watchdog החומרתי. ללא חיווט ל-GPIO הסוכן פועל במצב סימולציה
+                    ואינו נוגע באף פין. פרטים ב־<code class="bg-slate-100 px-1 rounded">pi/README.md</code>.
+                </p>
+
+                <p id="add-chamber-warn"
+                   class="hidden text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2.5 mt-3 leading-relaxed"></p>
+            </div>
+        </section>
     </main>
 
     <script type="module">
-        import { requireApprovedUser, signOutAndRedirect } from './js/auth-guard.js?v=20260908b';
-        import { mountChamberList } from './js/chambers-list.js?v=20260908b';
+        import { requireApprovedUser, signOutAndRedirect } from './js/auth-guard.js?v=20260915a';
+        import { mountChamberList } from './js/chambers-list.js?v=20260915a';
 
         document.getElementById('btn-signout').onclick = () => signOutAndRedirect();
 
         // Resolves only for a signed-in, approved user.
-        const { user } = await requireApprovedUser();
+        const { user, profile } = await requireApprovedUser();
         document.getElementById('user-email').innerText = user.email;
 
         const unmount = mountChamberList({
@@ -77,6 +142,89 @@
         });
 
         window.addEventListener('pagehide', unmount);
+
+        /* ------------------------------------------------------------------
+           Provisioning is for operators who install hardware. Everyone else
+           signs in to watch a chamber and move its setpoint, and showing them
+           shell commands for a Raspberry Pi is noise at best.
+
+           `admin` rides along on the profile the auth guard already fetched,
+           so this costs no extra read. It is set from the Firebase console
+           only: firestore.rules keeps it out of both the create and the update
+           allowed-field lists, so no client can grant it to itself.
+
+           This is a UI gate and nothing more. Chamber registration is open by
+           design — a Pi signs in anonymously and claims its own document,
+           which is exactly what lets it run with no credential on the device.
+           Anyone who already knows the command can still run it. Hiding the
+           panel keeps operators out of setup; it does not lock a door.
+           ------------------------------------------------------------------ */
+        if (profile.admin !== true) {
+            document.getElementById('add-chamber-panel').remove();
+        } else {
+            document.getElementById('add-chamber-panel').classList.remove('hidden');
+            mountAddChamberPanel();
+        }
+
+        function mountAddChamberPanel() {
+        /* ------------------------------------------------------------------
+           The "add a chamber" command.
+
+           Built from location.href, never from a constant. `new URL('.', ...)`
+           gives the directory this page was served from, which is what makes
+           a GitHub Pages project subpath (/climate-chambers/) work as well as
+           a domain root — and BASE_URL is passed through explicitly so the
+           script fetches its siblings from the same place it came from rather
+           than from whatever default it was written with.
+
+           Download-then-run, not `curl | bash`: with a pipe, stdin IS the
+           pipe, so setup.sh could not ask for the chamber name — it would
+           read its own source as the answer. This form also leaves the script
+           at /tmp/chamber-setup.sh for anyone who wants to read it first.
+           ------------------------------------------------------------------ */
+        const piBase = new URL('pi/', new URL('.', location.href)).href.replace(/\/$/, '');
+        const command =
+            `curl -fsSL ${piBase}/setup.sh -o /tmp/chamber-setup.sh && \\\n` +
+            `  sudo BASE_URL=${piBase} bash /tmp/chamber-setup.sh`;
+
+        document.getElementById('add-chamber-cmd').textContent = command;
+
+        /* A Pi cannot curl from localhost or file:// — say so here rather than
+           letting someone paste a command that will fail on the bench. */
+        if (!/^https?:$/.test(location.protocol) || /^(localhost|127\.|\[?::1)/.test(location.hostname)) {
+            const warn = document.getElementById('add-chamber-warn');
+            warn.classList.remove('hidden');
+            warn.innerHTML = '<strong>שים לב:</strong> הדף נטען מ-<code dir="ltr">' + location.origin
+                + '</code>, שאינו נגיש מה-Raspberry Pi. הפקודה תעבוד רק מהאתר הפומבי — '
+                + 'או שאפשר להעתיק את תיקיית <code dir="ltr">pi/</code> ל-Pi ולהריץ '
+                + '<code dir="ltr">sudo bash setup.sh</code> משם.';
+        }
+
+        const body = document.getElementById('add-chamber-body');
+        const chevron = document.getElementById('add-chamber-chevron');
+        document.getElementById('btn-add-chamber').onclick = () => {
+            const open = body.classList.toggle('hidden');
+            chevron.style.transform = open ? '' : 'rotate(180deg)';
+        };
+
+        document.getElementById('btn-copy-cmd').onclick = async (ev) => {
+            const btn = ev.currentTarget;
+            try {
+                await navigator.clipboard.writeText(command);
+                btn.innerHTML = '<i class="fa-solid fa-check"></i> הועתק';
+            } catch {
+                // Clipboard access is blocked outside a secure context, so fall
+                // back to selecting the text and letting the user press Ctrl+C.
+                const range = document.createRange();
+                range.selectNodeContents(document.getElementById('add-chamber-cmd'));
+                const sel = getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+                btn.innerHTML = '<i class="fa-solid fa-i-cursor"></i> Ctrl+C';
+            }
+            setTimeout(() => { btn.innerHTML = '<i class="fa-regular fa-copy"></i> העתק'; }, 2500);
+        };
+        }
     </script>
 </body>
 </html>
