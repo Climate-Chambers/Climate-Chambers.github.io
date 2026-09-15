@@ -19,15 +19,23 @@ import {
     serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
 
-import { auth, db } from './firebase-config.js?v=20260908b';
+import { auth, db } from './firebase-config.js?v=20260915a';
 
 /* Shape of a freshly created profile. Must match isValidNewUser() in
-   firestore.rules — approved MUST be false or the write is rejected. */
+   firestore.rules — approved and admin MUST both be false or the write is
+   rejected.
+
+   `admin` is written out rather than left absent so that every profile in the
+   console shows the field, and granting an operator is one click on an
+   existing boolean instead of adding a field and spelling it correctly. The
+   rules treat it as optional, so a browser still running a cached copy of this
+   file can keep signing people up. */
 export function newProfile(user, displayName) {
     return {
         email: user.email,
         displayName: (displayName || user.email.split('@')[0]).slice(0, 60),
         approved: false,
+        admin: false,
         createdAt: serverTimestamp()
     };
 }

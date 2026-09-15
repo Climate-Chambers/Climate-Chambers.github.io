@@ -9,7 +9,7 @@ python3 chamber.py
 To set up a Pi from scratch — one command, start to finish:
 
 ```bash
-sudo bash -c "$(curl -fsSL https://climate-chambers-1.web.app/pi/setup.sh)"
+sudo bash -c "$(curl -fsSL https://climate-chambers.github.io/pi/setup.sh)"
 ```
 
 It asks for the chamber name, then downloads the agent, installs it as a
@@ -290,7 +290,7 @@ it does not own. Unwanted chambers are deleted in the Firebase console.
 ## Install it for real (survives reboots and power cuts)
 
 ```bash
-sudo bash -c "$(curl -fsSL https://climate-chambers-1.web.app/pi/setup.sh)"
+sudo bash -c "$(curl -fsSL https://climate-chambers.github.io/pi/setup.sh)"
 ```
 
 That is the entire setup for a new Pi. Note the `bash -c "$(curl ...)"` form
@@ -356,7 +356,7 @@ The four `.py` files are deliberately *not* in the Hosting ignore list in
 ```bash
 mkdir -p ~/chamber && cd ~/chamber
 for f in chamber control hardware cloud; do
-  curl -fsSL "https://climate-chambers-1.web.app/pi/$f.py" -o "$f.py"
+  curl -fsSL "https://climate-chambers.github.io/pi/$f.py" -o "$f.py"
 done
 python3 chamber.py
 ```

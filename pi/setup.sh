@@ -2,7 +2,7 @@
 # ==========================================================================
 # One command. Sets up a Raspberry Pi as a climate chamber, start to finish.
 #
-#   sudo bash -c "$(curl -fsSL https://climate-chambers-1.web.app/pi/setup.sh)"
+#   sudo bash -c "$(curl -fsSL https://climate-chambers.github.io/pi/setup.sh)"
 #
 # or, if the files are already on the Pi:
 #
@@ -197,7 +197,7 @@ systemctl is-active --quiet chamber.service \
     || echo "  NOT running — see: journalctl -u chamber -n 40"
 echo
 echo "  Dashboard"
-echo "    https://climate-chambers-1.web.app/chamber.html?id=$CHAMBER_ID"
+echo "    https://climate-chambers.github.io/chamber.html?id=$CHAMBER_ID"
 echo
 echo "  Watch it      journalctl -u chamber -f"
 echo "  Stop it       sudo systemctl stop chamber"
