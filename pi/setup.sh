@@ -24,7 +24,16 @@
 # ==========================================================================
 set -euo pipefail
 
-BASE_URL="${BASE_URL:-https://climate-chambers-1.web.app/pi}"
+# Where to fetch the agent's four .py files from. The dashboard's "add a
+# chamber" panel passes this in, built from the address the page itself was
+# served from, so the Pi always pulls from the same site the operator was
+# looking at. The default below is only for a hand-typed run.
+#
+# NOTE this is GitHub Pages, NOT Firebase Hosting — the site is published from
+# the repository and the `pi/` folder has to be uploaded with it. Firebase is
+# still the backend the dashboard and the agent talk to; it just does not
+# serve these files.
+BASE_URL="${BASE_URL:-https://climate-chambers.github.io/pi}"
 FILES="chamber.py control.py hardware.py cloud.py"
 
 if [ "$(id -u)" -ne 0 ]; then
