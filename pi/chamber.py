@@ -65,6 +65,16 @@ def build_reports(hw, tuning, decision, desired, setpoint, sync, readings, ambie
         # stale, and whether anything below was measured or invented.
         "cloudOnline": sync.online,
         "setpointAgeS": round(age, 1) if age is not None else -1.0,
+        # How long a setpoint change can sit before this agent notices it.
+        # Published rather than hardcoded in the HTML so the dashboard can tell
+        # the operator how long to expect to wait, and stay truthful if the
+        # interval is retuned — the same reason simModel is published.
+        "syncIntervalS": cloud.SYNC_INTERVAL_S,
+        # The two timers behind `held`, so the dashboard can explain a pause in
+        # the operator's own numbers instead of quoting a default it hopes is
+        # still true.
+        "minOnS": tuning.min_on_s,
+        "minOffS": tuning.min_off_s,
         "fault": decision.fault or "",
         "held": decision.held,
         "updatedAt": datetime.now(timezone.utc),

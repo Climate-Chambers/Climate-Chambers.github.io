@@ -43,7 +43,23 @@ SETPOINT_FILE = os.path.join(STATE_DIR, "desired.json")
 DOC_ROOT = f"projects/{PROJECT_ID}/databases/(default)/documents"
 FIRESTORE = f"https://firestore.googleapis.com/v1/{DOC_ROOT}"
 
+# Two separate cadences, because they cost different things.
+#
+#   SYNC_INTERVAL_S     how often `desired` is READ. Sets how long a button
+#                       press in the dashboard takes to reach the chamber.
+#                       1 read per poll.
+#   PUBLISH_INTERVAL_S  how often readings are WRITTEN back, on top of the
+#                       immediate publish whenever the decision changes.
+#                       2 writes per publish.
+#
+# Firestore's free tier is 50,000 reads and 20,000 writes a day. Polling at
+# 10 s is 8,640 reads; publishing at 10 s is 17,280 writes, which is already
+# 86% of the write allowance for ONE chamber. Reads are the cheap direction
+# and writes are the scarce one, which is why these are separate knobs —
+# lowering SYNC_INTERVAL_S for a responsive demo costs far less than lowering
+# PUBLISH_INTERVAL_S, and the decision itself is published instantly anyway.
 SYNC_INTERVAL_S = float(os.environ.get("SYNC_INTERVAL_S", "10"))
+PUBLISH_INTERVAL_S = float(os.environ.get("PUBLISH_INTERVAL_S", "10"))
 AGENT_VERSION = "chamber/2.0"
 
 # In Python 3 `socket.error` IS `OSError`, and both URLError and ConnectionError
@@ -464,16 +480,37 @@ class SyncWorker(threading.Thread):
         self._shutdown = stop_event
         self._lock = threading.Lock()
         self._snapshot = None
+        self._last_decision = None
+        # Set by the control loop when the DECISION changes, so the sync thread
+        # stops waiting and publishes at once instead of sitting out the rest
+        # of its interval. This is the whole difference between "the LED came
+        # on and the dashboard showed it a moment later" and "…eight seconds
+        # later", and it costs nothing: the same publish happens either way,
+        # just sooner.
+        self._wake = threading.Event()
         self.online = False
         self.failures = 0
 
     def offer(self, reported, telemetry):
         """Called by the control loop every cycle. Cheap, and never raises."""
+        # Only the decision wakes the thread — deliberately NOT the readings.
+        # A modelled chamber's temperature changes every single cycle, so
+        # waking on that would publish at the control rate and turn a demo
+        # into tens of thousands of writes an hour. Readings ride along on the
+        # next scheduled publish; what a human is watching for is the moment
+        # the heater or fan switches.
+        decision = (reported.get("mode"), reported.get("demand"),
+                    reported.get("fault"), reported.get("heaterIntensity"),
+                    reported.get("fanTopSpeed"))
         with self._lock:
             self._snapshot = (reported, telemetry)
+            if decision != self._last_decision:
+                self._last_decision = decision
+                self._wake.set()
 
     def run(self):
         backoff = 0.0
+        last_publish = float("-inf")
         while not self._shutdown.is_set():
             try:
                 self.cloud.sign_in()
@@ -481,8 +518,16 @@ class SyncWorker(threading.Thread):
 
                 with self._lock:
                     snapshot = self._snapshot
-                if snapshot is not None:
+                    decision_changed = self._wake.is_set()
+
+                # Publish on a real change immediately; otherwise only as
+                # often as PUBLISH_INTERVAL_S allows. Polling can then be made
+                # as fast as the operator likes without multiplying writes.
+                now = time.monotonic()
+                if snapshot is not None and (
+                        decision_changed or now - last_publish >= PUBLISH_INTERVAL_S):
                     self.cloud.publish(*snapshot)
+                    last_publish = now
 
                 self.setpoint.update(self.cloud.pull_desired())
 
@@ -510,7 +555,17 @@ class SyncWorker(threading.Thread):
                 self._degrade(f"unexpected: {exc}")
                 backoff = min(120.0, max(5.0, backoff * 2 or 5.0))
 
-            self._shutdown.wait(SYNC_INTERVAL_S + backoff)
+            # Wait for the interval OR for the control loop to report a new
+            # decision, whichever comes first. Shutdown still takes priority:
+            # _shutdown is checked by the `while` on the next pass, and the
+            # short poll below keeps Ctrl-C responsive without a second thread.
+            self._wake.clear()
+            deadline = time.monotonic() + SYNC_INTERVAL_S + backoff
+            while not self._shutdown.is_set() and not self._wake.is_set():
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                self._wake.wait(min(remaining, 0.5))
 
     def _degrade(self, reason):
         self.failures += 1

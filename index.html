@@ -133,13 +133,44 @@
 
                 <p id="add-chamber-warn"
                    class="hidden text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2.5 mt-3 leading-relaxed"></p>
+
+                <!-- The demo rig, pre-filled. Kept as a separate block rather
+                     than folded into the command above, because those pin
+                     numbers describe ONE bench and would be wrong for a real
+                     chamber. The environment variables skip the wiring
+                     questions; everything else is identical. -->
+                <div class="mt-5 pt-4 border-t border-dashed border-slate-300">
+                    <p class="text-xs font-extrabold text-slate-800 mb-1 flex items-center gap-1.5">
+                        <i class="fa-solid fa-flask text-sky-600"></i> דוגמה של הדמו
+                    </p>
+                    <p class="text-[11px] text-slate-500 mb-2.5 leading-relaxed">
+                        המתקן שלנו: לד אדום על GPIO17 (פין פיזי 11) לחימום, וממסר Pololu על
+                        GPIO27 (פין פיזי 13) שמפעיל את מאוורר הקירור. הפקודה מדלגת על שאלות
+                        החיווט ומגדירה גם תגובה מהירה לדמו.
+                    </p>
+                    <div class="relative">
+                        <pre id="demo-cmd" dir="ltr"
+                             class="bg-slate-900 text-slate-100 text-[11px] leading-relaxed rounded-xl p-4 pl-24 overflow-x-auto font-mono whitespace-pre-wrap break-all"></pre>
+                        <button id="btn-copy-demo"
+                                class="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-100 text-[11px] font-bold transition">
+                            <i class="fa-regular fa-copy"></i> העתק
+                        </button>
+                    </div>
+                    <p class="text-[11px] text-slate-500 mt-2 leading-relaxed">
+                        <code dir="ltr" class="bg-slate-100 px-1 rounded">FAN_ACTIVE_LOW=0</code>
+                        מתאים ללוחות Pololu. ללוחות האופטיים הכחולים הזולים יש לשנות ל-
+                        <code dir="ltr" class="bg-slate-100 px-1 rounded">1</code>.
+                        <code dir="ltr" class="bg-slate-100 px-1 rounded">SYNC_INTERVAL_S=2</code>
+                        מקצר את זמן התגובה ללחיצה מ-10 שניות ל-2.
+                    </p>
+                </div>
             </div>
         </section>
     </main>
 
     <script type="module">
-        import { requireApprovedUser, signOutAndRedirect } from './js/auth-guard.js?v=20260915a';
-        import { mountChamberList } from './js/chambers-list.js?v=20260915a';
+        import { requireApprovedUser, signOutAndRedirect } from './js/auth-guard.js?v=20260916a';
+        import { mountChamberList } from './js/chambers-list.js?v=20260916a';
 
         document.getElementById('btn-signout').onclick = () => signOutAndRedirect();
 
@@ -201,6 +232,18 @@
 
         document.getElementById('add-chamber-cmd').textContent = command;
 
+        /* The demo rig, same URL, wiring answers supplied so the prompts are
+           skipped. Built from the same piBase so it cannot drift out of step
+           with the command above. */
+        const demoCommand =
+            `curl -fsSL ${piBase}/setup.sh -o /tmp/chamber-setup.sh && \\\n` +
+            `  sudo BASE_URL=${piBase} \\\n` +
+            `       HEATER_GPIO=17 HEATER_TYPE=led \\\n` +
+            `       FAN_GPIO=27 FAN_TYPE=relay FAN_ACTIVE_LOW=0 \\\n` +
+            `       MIN_ON_S=5 MIN_OFF_S=5 SYNC_INTERVAL_S=2 \\\n` +
+            `       bash /tmp/chamber-setup.sh`;
+        document.getElementById('demo-cmd').textContent = demoCommand;
+
         /* A Pi cannot curl from localhost or file:// — say so here rather than
            letting someone paste a command that will fail on the bench. */
         if (!/^https?:$/.test(location.protocol) || /^(localhost|127\.|\[?::1)/.test(location.hostname)) {
@@ -219,23 +262,30 @@
             chevron.style.transform = open ? '' : 'rotate(180deg)';
         };
 
-        document.getElementById('btn-copy-cmd').onclick = async (ev) => {
-            const btn = ev.currentTarget;
-            try {
-                await navigator.clipboard.writeText(command);
-                btn.innerHTML = '<i class="fa-solid fa-check"></i> הועתק';
-            } catch {
-                // Clipboard access is blocked outside a secure context, so fall
-                // back to selecting the text and letting the user press Ctrl+C.
-                const range = document.createRange();
-                range.selectNodeContents(document.getElementById('add-chamber-cmd'));
-                const sel = getSelection();
-                sel.removeAllRanges();
-                sel.addRange(range);
-                btn.innerHTML = '<i class="fa-solid fa-i-cursor"></i> Ctrl+C';
-            }
-            setTimeout(() => { btn.innerHTML = '<i class="fa-regular fa-copy"></i> העתק'; }, 2500);
-        };
+        function wireCopy(buttonId, preId, text) {
+            document.getElementById(buttonId).onclick = async (ev) => {
+                const btn = ev.currentTarget;
+                try {
+                    await navigator.clipboard.writeText(text);
+                    btn.innerHTML = '<i class="fa-solid fa-check"></i> הועתק';
+                } catch {
+                    // Clipboard access is blocked outside a secure context, so
+                    // select the text instead and let the user press Ctrl+C.
+                    const range = document.createRange();
+                    range.selectNodeContents(document.getElementById(preId));
+                    const sel = getSelection();
+                    sel.removeAllRanges();
+                    sel.addRange(range);
+                    btn.innerHTML = '<i class="fa-solid fa-i-cursor"></i> Ctrl+C';
+                }
+                setTimeout(() => {
+                    btn.innerHTML = '<i class="fa-regular fa-copy"></i> העתק';
+                }, 2500);
+            };
+        }
+
+        wireCopy('btn-copy-cmd', 'add-chamber-cmd', command);
+        wireCopy('btn-copy-demo', 'demo-cmd', demoCommand);
         }
     </script>
 </body>

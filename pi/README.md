@@ -100,7 +100,36 @@ to the default and says so rather than being coerced to zero):
 | `MAX_INSIDE_C` | 60 | hard cutout — software backstop, **not** a thermostat |
 | `MAX_OFFSET_C` | 10 | ceiling on a relative setpoint |
 | `CONTROL_INTERVAL_S` | 1.0 | control loop period |
-| `SYNC_INTERVAL_S` | 10 | how often the cloud thread publishes and polls |
+| `SYNC_INTERVAL_S` | 10 | how often `desired` is **read** — sets click-to-action latency |
+| `PUBLISH_INTERVAL_S` | 10 | how often readings are **written** back |
+
+### Latency, and what it costs
+
+The decision — heating, ventilating, idle, faulted — is published the **instant
+it changes**, whatever `PUBLISH_INTERVAL_S` says. The sync thread waits on an
+event the control loop sets, so an LED coming on reaches the dashboard in about
+as long as one Firestore round trip. Readings deliberately do *not* trigger
+that: a modelled chamber's temperature changes every cycle, and waking on it
+would publish at the control rate.
+
+That leaves one real delay: a button press waits up to `SYNC_INTERVAL_S` to be
+noticed, because Firestore's REST API has no listener.
+
+Reads and writes are separate knobs because they are not equally scarce. The
+free tier is 50,000 reads and 20,000 writes a day; each poll is one read, each
+publish is two writes. Polling at 10 s costs 8,640 reads — 17% of the read
+allowance — while publishing at 10 s costs 17,280 writes, **86% of the write
+allowance for a single chamber.** So make polling fast and leave publishing
+alone:
+
+| Use | Settings | Click-to-LED | Per day |
+|---|---|---|---|
+| Default | `SYNC_INTERVAL_S=10` | up to 10 s | 8.6k reads, 17k writes |
+| **Demo chamber, left running** | `SYNC_INTERVAL_S=2` | **up to 2 s** | 43k reads, 17k writes |
+| Live demo, for an hour | `SYNC_INTERVAL_S=1 PUBLISH_INTERVAL_S=2` | ~1 s | over quota if left on |
+
+The last row is fine for a demonstration and not for a weekend — the quota is
+daily and a demo lasts minutes. Just do not leave it there.
 
 The defaults are deliberately conservative: wide bands and long timers give a
 system that is unmistakably stable, which is the right place to tune *from*.

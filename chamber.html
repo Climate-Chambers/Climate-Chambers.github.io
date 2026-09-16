@@ -1344,6 +1344,10 @@
                diagnostics panel says "unknown" rather than quoting them. */
             reportedFault: '',      // reported.fault — '' when the controller is healthy
             setpointAgeS: -1,       // reported.setpointAgeS — -1 = never confirmed
+            syncIntervalS: 0,       // reported.syncIntervalS — how long a command may wait
+            held: false,            // reported.held — a min on/off timer is holding a change
+            minOnS: 0,              // reported.minOnS  — once running, runs at least this long
+            minOffS: 0,             // reported.minOffS — once stopped, stays stopped this long
             fanControlled: true,    // reported.fanControlled — false = wired to 5V, not commandable
 
             /* ---- Multi-chamber / Firestore additions ---------------------
@@ -1746,8 +1750,19 @@
                     sysBadge.innerText = `מצב: ${label}`;
                     sysBadge.title = 'המצב שהבקר מדווח עליו';
                 } else if (state.piOnline) {
-                    sysBadge.innerText = `ממתין לבקר: ${label}`;
-                    sysBadge.title = 'השינוי נשלח לבקר וממתין לאישורו';
+                    /* Say how long, and say why. The wait is the controller's
+                       polling interval and nothing else — there is no
+                       verification step here. `reported` echoes what the agent
+                       COMMANDED, not a measurement of what the hardware did:
+                       no tach wire, no current sensing. Wording this as
+                       "waiting for confirmation" would invent a guarantee the
+                       system does not provide. */
+                    const secs = (typeof state.syncIntervalS === 'number'
+                                  && state.syncIntervalS > 0)
+                        ? ` (עד ~${Math.ceil(state.syncIntervalS)} שנ׳)` : '';
+                    sysBadge.innerText = `נשלח לבקר${secs}: ${label}`;
+                    sysBadge.title = 'הפקודה נשמרה. הבקר קורא אותה במחזורים, '
+                        + 'ויעדכן כאן ברגע שיפעיל אותה.';
                 } else {
                     sysBadge.innerText = `מבוקש: ${label}`;
                     sysBadge.title = 'השינוי נשמר ויוחל כשהבקר יתחבר';
@@ -1917,9 +1932,26 @@
             // Controller answering. Now a red dot really does mean a sensor.
             const faulted = ['s2', 's0'].filter(c => componentHealth(c) === 'fault').length;
             if (state.reportedFault) {
+                // A fault outranks everything below: control.py clears `held`
+                // when it fails safe, so the two should never co-occur, but a
+                // pause must never be able to mask a real fault.
                 note.className = 'text-xs text-red-800 bg-red-50 border border-red-200 rounded-lg p-2.5 mb-4';
                 note.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> <strong>הבקר מדווח על תקלה:</strong> '
                     + escapeHtmlUI(state.reportedFault) + ' — המפעילים הופסקו.';
+            } else if (state.held) {
+                /* A deliberate pause, not a stall. Without saying so the
+                   operator presses the button again, sees nothing happen
+                   again, and concludes the system is broken — so the one
+                   moment it is worth explaining is while it is happening. */
+                const on = state.minOnS ? `${Math.round(state.minOnS)} שנ׳` : 'זמן מינימלי';
+                const off = state.minOffS ? `${Math.round(state.minOffS)} שנ׳` : 'זמן מינימלי';
+                note.className = 'text-xs text-sky-900 bg-sky-50 border border-sky-200 rounded-lg p-2.5 mb-4 leading-relaxed';
+                note.innerHTML = '<i class="fa-solid fa-shield-halved"></i> '
+                    + '<strong>המתנה לצורך הגנה על הציוד.</strong> הבקר קיבל את הפקודה '
+                    + 'ומשהה אותה: מפעיל שנדלק חייב לפעול לפחות <strong>' + on + '</strong>, '
+                    + 'ומפעיל שכבה חייב להישאר כבוי לפחות <strong>' + off + '</strong>. '
+                    + 'ההגבלה מונעת הפעלה־כיבוי מהירים שהורסים ממסרים ומנועים. '
+                    + '<u>כיבוי חירום ותקלות אינם ממתינים</u> — הם מופעלים מיד.';
             } else if (faulted) {
                 note.className = 'text-xs text-red-800 bg-red-50 border border-red-200 rounded-lg p-2.5 mb-4';
                 note.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> <strong>תקלת חיישן.</strong> `
@@ -3853,6 +3885,10 @@
                only party that can see the chamber. */
             state.reportedFault = typeof reported.fault === 'string' ? reported.fault : '';
             state.setpointAgeS = typeof reported.setpointAgeS === 'number' ? reported.setpointAgeS : -1;
+            state.syncIntervalS = typeof reported.syncIntervalS === 'number' ? reported.syncIntervalS : 0;
+            state.held = reported.held === true;
+            state.minOnS = typeof reported.minOnS === 'number' ? reported.minOnS : 0;
+            state.minOffS = typeof reported.minOffS === 'number' ? reported.minOffS : 0;
             state.fanControlled = reported.fanControlled !== false;
             renderDiagnostics();
 
@@ -4014,9 +4050,9 @@
          the classic script above has defined window.ChamberUI.
          ====================================================================== -->
     <script type="module">
-        import { requireApprovedUser, signOutAndRedirect, renderBlockingScreen } from './js/auth-guard.js?v=20260915a';
-        import { attachChamber, listChamberTabs } from './js/chamber-store.js?v=20260915a';
-        import { createSimulator } from './js/simulator.js?v=20260915a';
+        import { requireApprovedUser, signOutAndRedirect, renderBlockingScreen } from './js/auth-guard.js?v=20260916a';
+        import { attachChamber, listChamberTabs } from './js/chamber-store.js?v=20260916a';
+        import { createSimulator } from './js/simulator.js?v=20260916a';
 
         document.getElementById('btn-signout').onclick = () => signOutAndRedirect();
 
