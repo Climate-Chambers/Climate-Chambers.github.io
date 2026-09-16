@@ -739,7 +739,10 @@
                 <div id="amb-sim-controls" class="hidden mt-3">
                     <div class="stepper">
                         <button type="button" id="amb-minus" aria-label="הקטן">−</button>
-                        <input type="number" id="amb-value-input" value="21.0" step="0.5" min="-40" max="80" aria-describedby="amb-unit">
+                        <!-- min/max match the slider below and AMB_MIN/AMB_MAX
+                             exactly: a field that accepted numbers the slider
+                             cannot reach is how the two used to disagree. -->
+                        <input type="number" id="amb-value-input" value="21.0" step="0.5" min="-10" max="50" aria-describedby="amb-unit">
                         <!-- dir="ltr": "°C" opens with a neutral character, so
                              in this RTL page it would otherwise render "C°". -->
                         <span id="amb-unit" class="unit" dir="ltr">°C</span>
@@ -1582,15 +1585,28 @@
            2b. Outside temperature — demo override
 
            The value travels the same path as any other setpoint:
-           browser -> desired.simAmbient -> controller. The browser never fakes
-           the reading itself, so the "חוץ" tile keeps showing only what the
-           controller published; a second or two after a change it follows,
-           the target is recomputed from it (relative mode), and the heater or
-           the fans come on to close the new gap. Clearing the switch removes
-           the key, and the controller returns to its own probe.
+           browser -> desired.simAmbient -> controller, and the controller
+           adopts it within a second or two.
+
+           While the override is on, though, the override IS the outdoor
+           temperature as far as this page is concerned, so the "חוץ" tile
+           follows the control immediately instead of waiting for the round
+           trip. Waiting looked like a bug: the tile sat still while the slider
+           moved, then jumped. Telemetry still overwrites `ambientTemp` on
+           every snapshot, so if a controller ever disagreed with the request
+           the tile would show the controller's number, not ours.
+
+           Clearing the switch removes the key, and the controller returns to
+           its own probe.
            ========================================================================== */
-        const AMB_MIN = -40;   // matches isBoundedNumber() in firestore.rules
-        const AMB_MAX = 80;
+        /* One range for the whole control: the slider's min/max, the number
+           field's, and the clamp below. They must stay equal — a field that
+           accepted 60°C while the slider stopped at 50 made the two show
+           different numbers for the same state. Well inside the -40…80 that
+           isBoundedNumber() in firestore.rules accepts. */
+        const AMB_MIN = -10;
+        const AMB_MAX = 50;
+        const clampAmb = (v) => Math.min(AMB_MAX, Math.max(AMB_MIN, v));
 
         let ambPublishTimer = null;
         function publishSimAmbient() {
@@ -1612,29 +1628,42 @@
             if (enable) enable.checked = on;
             if (controls) controls.classList.toggle('hidden', !on);
             if (pill) pill.classList.toggle('hidden', !on);
+            if (!on) return;
 
-            // Never yank a control the operator is holding.
-            const busy = document.activeElement === input || document.activeElement === slider;
-            if (on && !busy) {
-                if (input) input.value = state.simAmbient.toFixed(1);
-                if (slider) slider.value = String(Math.min(50, Math.max(-10, state.simAmbient)));
-            }
+            /* Skip only the one control the operator is actually holding —
+               never both. Guarding them together is what let the field and the
+               slider drift apart: dragging the slider focuses it, so the old
+               `busy` test suppressed the field's update as well, and nothing
+               refreshed it afterwards. */
+            const active = document.activeElement;
+            if (input && active !== input) input.value = state.simAmbient.toFixed(1);
+            if (slider && active !== slider) slider.value = String(clampAmb(state.simAmbient));
         }
 
         function setSimAmbient(value) {
             const v = parseFloat(value);
             if (isNaN(v)) return;
-            state.simAmbient = Math.min(AMB_MAX, Math.max(AMB_MIN, v));
+            state.simAmbient = clampAmb(v);
+
+            /* The override is the outdoor temperature while it is on, so the
+               summary strip, the recomputed target and the unreachable notice
+               all move with the control instead of a round trip later. */
+            state.ambientTemp = state.simAmbient;
+
             renderSimAmbientUI();
+            updateCalculations();
             publishSimAmbient();
         }
 
         /* Turning the override ON seeds it with the temperature currently
            reported outside, so nothing jumps at the moment of the switch. */
         function toggleSimAmbient(on) {
-            state.simAmbient = on
-                ? Math.round((isFinite(state.ambientTemp) ? state.ambientTemp : 21) * 2) / 2
-                : null;
+            if (on) {
+                const seed = isFinite(state.ambientTemp) ? state.ambientTemp : 21;
+                setSimAmbient(Math.round(clampAmb(seed) * 2) / 2);
+                return;
+            }
+            state.simAmbient = null;
             renderSimAmbientUI();
             publishSimAmbient();
         }
@@ -1646,12 +1675,12 @@
             const minus = document.getElementById('amb-minus');
             const plus = document.getElementById('amb-plus');
 
+            /* Every entry point goes through setSimAmbient(), which renders
+               both controls. None of them writes a field directly any more:
+               two places setting the same value is how they got out of step. */
             function step(d) {
                 const base = typeof state.simAmbient === 'number' ? state.simAmbient : state.ambientTemp;
                 setSimAmbient(Math.round((base + d) * 2) / 2);
-                if (input && typeof state.simAmbient === 'number') {
-                    input.value = state.simAmbient.toFixed(1);
-                }
             }
 
             if (enable) enable.addEventListener('change', (e) => toggleSimAmbient(e.target.checked));
@@ -1660,13 +1689,28 @@
             if (minus) minus.addEventListener('click', () => step(-0.5));
             if (plus) plus.addEventListener('click', () => step(+0.5));
 
+            /* A half-typed or out-of-range field ("-", "1.", "99") is left
+               alone while the operator is typing — setSimAmbient() clamps or
+               ignores the value but renderSimAmbientUI() will not rewrite the
+               field under the caret. Once the entry is committed, re-render so
+               it cannot be left showing a number the slider and the "חוץ" tile
+               disagree with. */
+            function commitInput() {
+                // Unconditional, unlike renderSimAmbientUI(): pressing Enter
+                // fires `change` with the field still focused, and "99" must
+                // not be left standing against a clamped state of 50.
+                if (input && typeof state.simAmbient === 'number') {
+                    input.value = state.simAmbient.toFixed(1);
+                }
+                renderSimAmbientUI();
+            }
+            if (input) {
+                input.addEventListener('change', commitInput);
+                input.addEventListener('blur', commitInput);
+            }
+
             document.querySelectorAll('.amb-preset').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    setSimAmbient(btn.getAttribute('data-amb'));
-                    if (input && typeof state.simAmbient === 'number') {
-                        input.value = state.simAmbient.toFixed(1);
-                    }
-                });
+                btn.addEventListener('click', () => setSimAmbient(btn.getAttribute('data-amb')));
             });
         })();
 
@@ -3833,7 +3877,15 @@
             if (!t) return;
 
             if (t.ambient) {
-                if (typeof t.ambient.temp === 'number') state.ambientTemp = t.ambient.temp;
+                /* While the demo override is on, it — not this reading — is the
+                   outdoor temperature: the controller is only echoing the value
+                   back a beat later. Accepting the echo made the "חוץ" tile
+                   flick back to the previous number after every move of the
+                   slider, and disagree with it outright until the controller
+                   caught up. Humidity is still the probe's. */
+                if (typeof t.ambient.temp === 'number' && typeof state.simAmbient !== 'number') {
+                    state.ambientTemp = t.ambient.temp;
+                }
                 if (typeof t.ambient.rh === 'number') state.ambientRH = t.ambient.rh;
             }
 
@@ -3910,31 +3962,43 @@
                write of our own is still queued, in which case the snapshot we
                are looking at is older than what the operator just asked for. */
             if (!ambPublishTimer) {
-                const incoming = typeof desired.simAmbient === 'number' ? desired.simAmbient : null;
+                const raw = typeof desired.simAmbient === 'number' ? desired.simAmbient : null;
+                const incoming = raw === null ? null : clampAmb(raw);
                 if (incoming !== state.simAmbient) {
                     state.simAmbient = incoming;
+                    // Same rule as setSimAmbient(): while the override is on it
+                    // is the outdoor temperature, whoever set it.
+                    if (incoming !== null) state.ambientTemp = incoming;
                     renderSimAmbientUI();
+                    /* A stored override outside the control's range cannot be
+                       shown faithfully by either the field or the slider, so
+                       correct it once — as the setpoint below does. */
+                    if (raw !== null && raw !== incoming) publishSimAmbient();
                 }
             }
 
             const valInput = document.getElementById('target-value-input');
             const slider = document.getElementById('offset-slider');
             const busy = document.activeElement === valInput || document.activeElement === slider;
-            if (busy) return;
 
-            if (desired.targetMode && desired.targetMode !== state.targetMode) {
-                state.targetMode = desired.targetMode;
-                renderTargetModeUI(desired.targetMode);
-            }
-            if (typeof desired.targetValue === 'number') {
-                state.targetValue = clampTarget(desired.targetValue);
-                if (valInput) valInput.value = state.targetValue.toFixed(1);
+            /* The target mirror is skipped while the operator holds one of its
+               own controls, but the render below is not: the ambient mirror
+               above may have moved the "חוץ" tile. */
+            if (!busy) {
+                if (desired.targetMode && desired.targetMode !== state.targetMode) {
+                    state.targetMode = desired.targetMode;
+                    renderTargetModeUI(desired.targetMode);
+                }
+                if (typeof desired.targetValue === 'number') {
+                    state.targetValue = clampTarget(desired.targetValue);
+                    if (valInput) valInput.value = state.targetValue.toFixed(1);
 
-                /* A stored offset from outside the current range — a negative
-                   one saved before the relative mode became 0…10 — is not
-                   attainable. Correct it once rather than showing the operator
-                   a setpoint the chamber can never meet. */
-                if (state.targetValue !== desired.targetValue) publishTarget();
+                    /* A stored offset from outside the current range — a negative
+                       one saved before the relative mode became 0…10 — is not
+                       attainable. Correct it once rather than showing the operator
+                       a setpoint the chamber can never meet. */
+                    if (state.targetValue !== desired.targetValue) publishTarget();
+                }
             }
             updateCalculations();
         }
