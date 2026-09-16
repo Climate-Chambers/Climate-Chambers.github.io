@@ -100,9 +100,20 @@
                 </p>
                 <ol class="text-xs text-slate-600 space-y-1.5 mb-4 list-decimal pr-4 font-medium">
                     <li>חבר את ה-Raspberry Pi לחשמל ולרשת, והתחבר אליו ב-SSH.</li>
-                    <li>הדבק את הפקודה הבאה. היא תשאל אותך בשם התא ותמשיך לבד.</li>
+                    <li>הדבק את הפקודה הבאה. היא תשאל אותך <strong>שם לתא</strong> ואז
+                        <strong>לאילו פינים חוברו החימום והקירור</strong> — Enter מדלג על
+                        כל שאלה, ואז התא פועל בסימולציה בלבד ואינו נוגע באף פין.</li>
                     <li>התא יופיע ברשימה הזו תוך כדקה, ויעלה מעצמו אחרי כל אתחול.</li>
                 </ol>
+
+                <p class="text-[11px] text-sky-900 bg-sky-50 border border-sky-200 rounded-lg p-2.5 mb-4 leading-relaxed">
+                    <i class="fa-solid fa-lightbulb"></i>
+                    <strong>מתקן דמו:</strong> לד לחימום ומאוורר דרך ממסר לקירור — ענה
+                    <code dir="ltr" class="bg-white px-1 rounded">17</code> (לד, פין פיזי 11) ו-
+                    <code dir="ltr" class="bg-white px-1 rounded">27</code> (ממסר, פין פיזי 13).
+                    לשאלת הקוטביות: <strong>לא</strong> ללוחות Pololu, <strong>כן</strong>
+                    ללוחות האופטיים הכחולים הזולים.
+                </p>
 
                 <div class="relative">
                     <pre id="add-chamber-cmd" dir="ltr"
@@ -115,8 +126,9 @@
 
                 <p class="text-[11px] text-slate-500 mt-3 leading-relaxed">
                     הפקודה מורידה את הסוכן מהאתר הזה, מתקינה אותו כשירות שעולה באתחול,
-                    ומפעילה את ה-watchdog החומרתי. ללא חיווט ל-GPIO הסוכן פועל במצב סימולציה
-                    ואינו נוגע באף פין. פרטים ב־<code class="bg-slate-100 px-1 rounded">pi/README.md</code>.
+                    ומפעילה את ה-watchdog החומרתי. הרצה חוזרת בטוחה — היא מרעננת את
+                    הקבצים ומאתחלת את השירות, והתא שומר על הזהות וההיסטוריה שלו.
+                    פרטי חיווט, נגדים וקוטביות ממסרים ב־<code class="bg-slate-100 px-1 rounded">pi/README.md</code>.
                 </p>
 
                 <p id="add-chamber-warn"

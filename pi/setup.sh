@@ -114,6 +114,84 @@ echo "  name   $CHAMBER_NAME"
 echo "  id     $CHAMBER_ID"
 echo
 
+# ---- 2b. wiring ----------------------------------------------------------
+# Asked rather than assumed, because the alternative was worse in both
+# directions: a bare install produced a chamber with no actuators and no hint
+# as to why, and the fix — five environment variables the operator had to know
+# to prepend — is not something anyone guesses from a dashboard button.
+#
+# Anything already set on the command line is left alone, and every question
+# defaults to "not connected", so pressing Enter four times gives exactly the
+# old behaviour. Skipped entirely when there is no terminal to ask.
+ask_gpio() {
+    # $1 prompt, $2 variable name. Accepts a BCM number or empty for none.
+    local prompt="$1" varname="$2" reply
+    [ -n "${!varname:-}" ] && return 0
+    while :; do
+        printf "  %s " "$prompt"
+        read -r reply </dev/tty || reply=""
+        [ -z "$reply" ] && return 0
+        if [ "$reply" -ge 2 ] 2>/dev/null && [ "$reply" -le 27 ] 2>/dev/null; then
+            printf -v "$varname" '%s' "$reply"
+            return 0
+        fi
+        echo "    not a BCM GPIO number (2-27). Enter to skip."
+    done
+}
+
+if [ -t 0 ] && [ -z "${FAN_GPIO:-}${HEATER_GPIO:-}" ]; then
+    cat <<'WIRING'
+  Wiring. Press Enter at any question to leave that output unconnected —
+  the agent then models the chamber in software and drives no pins at all.
+
+  BCM numbers, not physical pin positions. A demo rig usually uses an LED on
+  17 (physical pin 11) for heating and a relay on 27 (physical pin 13) for the
+  cooling fan.
+
+WIRING
+    ask_gpio "Heating output  — LED or relay, BCM GPIO [none]:" HEATER_GPIO
+    if [ -n "${HEATER_GPIO:-}" ] && [ -z "${HEATER_TYPE:-}" ]; then
+        printf "    Is it an LED or a relay? [led/relay] (led): "
+        read -r reply </dev/tty || reply=""
+        case "${reply:-led}" in
+            relay|r) HEATER_TYPE=relay ;;
+            *)       HEATER_TYPE=led ;;
+        esac
+    fi
+
+    ask_gpio "Cooling output  — fan relay, BCM GPIO [none]:" FAN_GPIO
+    if [ -n "${FAN_GPIO:-}" ] && [ -z "${FAN_ACTIVE_LOW:-}" ]; then
+        # The one question that damages hardware if guessed wrong, so it is
+        # asked in plain language rather than as "active low?".
+        printf "    Does the relay switch ON when the pin goes LOW?\n"
+        printf "    (cheap blue opto boards: yes.  Pololu carriers: no)  [y/N]: "
+        read -r reply </dev/tty || reply=""
+        case "$reply" in
+            [Yy]*) FAN_ACTIVE_LOW=1 ;;
+            *)     FAN_ACTIVE_LOW=0 ;;
+        esac
+    fi
+    echo
+fi
+
+if [ -n "${HEATER_GPIO:-}" ] || [ -n "${FAN_GPIO:-}" ]; then
+    if [ -n "${HEATER_GPIO:-}" ]; then
+        echo "  heat   GPIO$HEATER_GPIO (${HEATER_TYPE:-relay})"
+    else
+        echo "  heat   not connected"
+    fi
+    if [ -n "${FAN_GPIO:-}" ]; then
+        if [ "${FAN_ACTIVE_LOW:-0}" = 1 ]; then pol=LOW; else pol=HIGH; fi
+        echo "  cool   GPIO$FAN_GPIO (${FAN_TYPE:-relay}, active-$pol)"
+    else
+        echo "  cool   not connected"
+    fi
+    echo
+    echo "  Verify these against the board before trusting them. A wrong"
+    echo "  polarity leaves an output energised — see pi/README.md."
+    echo
+fi
+
 install -d -o "$RUN_USER" -g "$RUN_USER" -m 700 "$STATE_DIR"
 
 # ---- 3. GPIO -------------------------------------------------------------

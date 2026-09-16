@@ -12,9 +12,10 @@ To set up a Pi from scratch — one command, start to finish:
 sudo bash -c "$(curl -fsSL https://climate-chambers.github.io/pi/setup.sh)"
 ```
 
-It asks for the chamber name, then downloads the agent, installs it as a
-service that starts at boot, enables the hardware watchdog and starts it.
-Press Enter at the prompt to accept the default name.
+It asks for the chamber name and for which GPIO pins the heating and cooling
+outputs are wired to, then downloads the agent, installs it as a service that
+starts at boot, enables the hardware watchdog and starts it. Press Enter at any
+question to accept the default or leave that output unconnected.
 
 The first run registers this Pi in Firestore and claims a chamber document;
 every run after that re-claims the same one. No dependencies — Python 3
@@ -29,7 +30,7 @@ after an OS upgrade.
 | [`control.py`](control.py) | 245 | the control law: hysteresis, minimum on/off times, faults | nothing |
 | [`hardware.py`](hardware.py) | 328 | sensors and actuators — **the file to edit when wiring** | GPIO |
 | [`cloud.py`](cloud.py) | 520 | auth, Firestore REST, the sync thread, on-disk state | network |
-| [`setup.sh`](setup.sh) | 230 | download, prompt, systemd unit, watchdog. Run once, with sudo | — |
+| [`setup.sh`](setup.sh) | 308 | download, prompt, systemd unit, watchdog. Run once, with sudo | — |
 
 The split is not cosmetic. `control.py` imports no I/O of any kind and takes
 its clock as an argument, so the entire control law can be exercised on a
@@ -181,18 +182,40 @@ The most useful configuration before any real chamber exists: the degrees are
 **modelled**, but an LED and a fan really switch, so the control decision is
 visible on a bench with no probes and no heater.
 
-```bash
-sudo HEATER_GPIO=17 HEATER_TYPE=led      FAN_GPIO=6 FAN_TYPE=relay      MIN_ON_S=5 MIN_OFF_S=5 RATE_C_PER_S=0.5      bash setup.sh
+`setup.sh` asks for the wiring, so the ordinary install command is all you
+need — there is nothing to prepend and nothing to remember:
+
+```
+  Heating output  — LED or relay, BCM GPIO [none]: 17
+    Is it an LED or a relay? [led/relay] (led):
+  Cooling output  — fan relay, BCM GPIO [none]: 27
+    Does the relay switch ON when the pin goes LOW?
+    (cheap blue opto boards: yes.  Pololu carriers: no)  [y/N]: n
 ```
 
-The agent prints what it understood, and the banner now names both halves
+Press Enter at any question to leave that output unconnected; the agent then
+models the chamber and drives no pins, which is the old behaviour exactly.
+Every answer has an environment-variable equivalent that skips its question,
+which is what a scripted or repeat install uses:
+
+```bash
+sudo HEATER_GPIO=17 HEATER_TYPE=led \
+     FAN_GPIO=27 FAN_TYPE=relay FAN_ACTIVE_LOW=0 \
+     MIN_ON_S=5 MIN_OFF_S=5 RATE_C_PER_S=0.5 \
+     bash setup.sh
+```
+
+The agent prints what it understood, and the banner names both halves
 separately:
 
 ```
 hardware: heater on GPIO17 as led, active-HIGH
-hardware: fan on GPIO6 as relay, active-LOW
+hardware: fan on GPIO27 as relay, active-HIGH
 chamber: chamber-...   hardware: SIMULATED sensors / GPIO outputs
 ```
+
+Those first two lines are the ones to check against the board. If either
+polarity is wrong, stop before connecting anything that can get hot.
 
 `SIMULATED sensors / GPIO outputs` is the demo rig. `reported.simulated` stays
 `true` — it tracks the *readings*, not the outputs, because the degrees are
@@ -204,16 +227,32 @@ looking at it.
 
 #### Pins
 
-| Signal | BCM | Physical pin | Why this one |
-|---|---|---|---|
-| LED (heating) | GPIO17 | **11** | GPIO9–27 default to a **pull-down** at boot, so the pin is LOW and the LED is dark from power-on |
-| Relay IN (cooling) | GPIO6 | **31** | GPIO0–8 default to a **pull-up**, so the pin is HIGH and an active-low relay stays released from power-on |
+**Pick the pin to match the board's polarity.** From power-on until the agent
+starts, a pin is a floating input held only by its power-on default, and that
+default is what decides whether an output sits idle or energised during those
+~30 seconds. It is the boot-gap problem solved by choosing a pin instead of
+adding a resistor.
 
-That asymmetry is the whole reason for the two choices, and it is the boot-gap
-problem solved by picking the right pin instead of adding a resistor. GPIO0/1
-are reserved for HAT EEPROM, 2/3 have fixed I²C pull-ups, 7–11 are SPI and
-14/15 are the serial console — which leaves GPIO5 (pin 29) and GPIO6 (pin 31)
-as the free pull-up pins.
+| Power-on default | BCM range | Use for |
+|---|---|---|
+| **pull-DOWN** (reads LOW) | GPIO9–27 | LEDs, MOSFET gates, and **active-HIGH** relay boards |
+| **pull-UP** (reads HIGH) | GPIO2–8 | **active-LOW** relay boards |
+
+So the demo rig:
+
+| Signal | BCM | Physical pin | Why |
+|---|---|---|---|
+| LED (heating) | GPIO17 | **11** | pull-down at boot → LED dark from power-on |
+| Relay IN, **Pololu / active-HIGH** | GPIO27 | **13** | pull-down at boot → coil released from power-on |
+| Relay IN, **blue opto board / active-LOW** | GPIO6 | **31** | pull-up at boot → coil released from power-on |
+
+Getting this backwards does not damage anything by itself — it just means the
+output is on for the first half-minute after every power-up, which for a heater
+is exactly the half-minute you do not want.
+
+GPIO0/1 are reserved for HAT EEPROM, 2/3 carry fixed I²C pull-ups, 7–11 are SPI
+and 14/15 are the serial console, which leaves GPIO5 (pin 29) and GPIO6 (pin 31)
+as the practical pull-up pins.
 
 #### LED — yes, it needs a resistor
 
@@ -230,10 +269,12 @@ GPIO17 (pin 11) ──/\/\/\──►|── GND (pin 9)
 **220 Ω** with a red LED gives (3.3 − 2.0) / 220 ≈ **5.9 mA** — comfortably
 under the limit and plenty bright. 330 Ω works too, slightly dimmer.
 
-**Use a red LED.** Blue, white and most greens have a forward voltage of
-3.0–3.2 V, leaving almost nothing across the resistor: (3.3 − 3.1) / 220 ≈
-0.9 mA, which is barely visible. Red is ~2.0 V and is the only colour that is
-comfortable on a 3.3 V rail. Red also happens to be the right colour for heat.
+**Colour matters on a 3.3 V rail.** Red is ~2.0 V and always works. Blue,
+white and "pure green" (InGaN) are 3.0–3.2 V, leaving almost nothing across the
+resistor — (3.3 − 3.1) / 220 ≈ 0.9 mA, barely visible. Older green (GaP) is
+~2.1 V and is fine. You cannot tell the two greens apart by looking, so just
+try it: if the LED is dim, drop to **100 Ω**, which is still safe — even at a
+1.8 V forward voltage that is (3.3 − 1.8) / 100 = 15 mA, under the 16 mA limit.
 
 Pins 11 and 9 are adjacent on the header, so this is two jumpers.
 
@@ -244,13 +285,13 @@ positive lead moves — it goes through the relay contacts instead of straight
 to the rail:
 
 ```
-  5V  (pin 2)  ──── relay VCC
-  GND (pin 39) ──── relay GND
-  GPIO6 (pin 31) ── relay IN
+  5V  (pin 2)   ──── relay VDD / VCC
+  GND (pin 14)  ──── relay GND
+  GPIO27 (pin 13) ── relay EN1 / IN
 
-  5V  (pin 4)  ──── relay COM
-  relay NO     ──── fan +          NO = normally open, so the fan is OFF
-  fan −        ──── GND (pin 6)    until the agent energises the coil
+  5V  (pin 4)   ──── relay COM1
+  relay NO1     ──── fan +         NO = normally open, so the fan is OFF
+  fan −         ──── GND (pin 6)   until the agent energises the coil
 ```
 
 Use **NO**, not NC. With NO the fan is off when the relay is unpowered, which
