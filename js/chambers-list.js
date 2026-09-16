@@ -14,7 +14,7 @@ import {
     query
 } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
 
-import { db, HEARTBEAT_TIMEOUT_MS } from './firebase-config.js?v=20260916b';
+import { db, HEARTBEAT_TIMEOUT_MS } from './firebase-config.js?v=20260916c';
 
 const MODE_LABELS = {
     AUTO: 'אוטומטי',
@@ -49,6 +49,11 @@ export function mountChamberList({ grid, empty, count }) {
     gridEl = grid;
     emptyEl = empty;
     countEl = count;
+
+    emptyEl.classList.remove('hidden');
+    emptyEl.innerHTML = `
+        <i class="fa-solid fa-circle-notch fa-spin text-3xl text-slate-300 mb-3"></i>
+        <p class="text-sm font-bold text-slate-700 mb-1">סורק תאים זמינים...</p>`;
 
     const q = query(collection(db, 'chambers'), orderBy('name'));
 

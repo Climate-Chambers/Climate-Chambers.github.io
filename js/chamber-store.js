@@ -24,7 +24,7 @@ import {
     updateDoc
 } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
 
-import { auth, db, HEARTBEAT_TIMEOUT_MS } from './firebase-config.js?v=20260916b';
+import { auth, db, HEARTBEAT_TIMEOUT_MS } from './firebase-config.js?v=20260916c';
 
 /**
  * Subscribes the dashboard to one chamber. Returns a teardown function.
