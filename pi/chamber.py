@@ -77,7 +77,7 @@ def build_reports(hw, tuning, decision, desired, setpoint, sync, readings, ambie
     # hardware is wired. Publishing the rates the loop is *actually* applying,
     # rather than a constant in the HTML, is what stops the note drifting out
     # of step with the code.
-    if hw.backend == "SIMULATED":
+    if hw.sensors == "SIMULATED":
         reported["simModel"] = {
             "ratePerSecondC": hardware.RATE_C_PER_S,
             "intervalS": CONTROL_INTERVAL_S,

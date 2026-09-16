@@ -71,10 +71,22 @@ def _flag(name, default=False):
 #   VERIFY IT ANYWAY, with the mains side disconnected — see pi/README.md.
 # ---------------------------------------------------------------------------
 
+#   "led" is the third type: electrically identical to "relay" (a digital pin,
+#   never PWM) but it defaults ACTIVE_LOW the other way, because an LED wired
+#   GPIO -> resistor -> anode, cathode -> GND lights when the pin goes HIGH.
+#   Encoding that in the type name is what stops someone pairing an LED with a
+#   relay board's polarity and wondering why it is lit whenever it should be
+#   dark.
+
 FAN_TYPE = (os.environ.get("FAN_TYPE") or "relay").strip().lower()
 HEATER_TYPE = (os.environ.get("HEATER_TYPE") or "relay").strip().lower()
-FAN_ACTIVE_LOW = _flag("FAN_ACTIVE_LOW", True)
-HEATER_ACTIVE_LOW = _flag("HEATER_ACTIVE_LOW", True)
+
+# Relay boards idle HIGH, LEDs and MOSFET gates idle LOW. Defaulting per type
+# means the common wiring needs no flag at all; the env var still overrides.
+_DEFAULT_ACTIVE_LOW = {"relay": True, "led": False, "pwm": False}
+
+FAN_ACTIVE_LOW = _flag("FAN_ACTIVE_LOW", _DEFAULT_ACTIVE_LOW.get(FAN_TYPE, False))
+HEATER_ACTIVE_LOW = _flag("HEATER_ACTIVE_LOW", _DEFAULT_ACTIVE_LOW.get(HEATER_TYPE, False))
 
 SENSOR_COUNT = int(os.environ.get("SENSOR_COUNT", "5"))
 SENSOR_LABELS = ["עליון שמאל", "עליון ימין", "מרכז התא", "תחתון שמאל", "תחתון ימין"]
@@ -108,7 +120,30 @@ class Hardware:
     def __init__(self):
         self._outputs = {"fan": 0.0, "heater": 0.0}
         self._pins = {}
-        self.backend = "SIMULATED"
+
+        # TWO independent facts, which an earlier version wrongly collapsed
+        # into one `backend` flag:
+        #
+        #   sensors  where the readings come from
+        #   outputs  whether any real pin gets driven
+        #
+        # Conflating them made the useful middle case impossible — a demo rig
+        # where the chamber is a model but an LED and a fan really do switch,
+        # so you can watch the control decision happen on a bench with no
+        # probes and no heater. All four combinations are legitimate:
+        #
+        #   SIMULATED + NONE   pure software demo, what you get with no wiring
+        #   SIMULATED + GPIO   demo rig: modelled degrees, real LED and fan
+        #   REAL      + GPIO   an actual chamber
+        #   REAL      + NONE   monitoring only, no actuators fitted
+        #
+        # `sensors` is hardcoded to SIMULATED because no probe driver exists
+        # yet: read_ambient() and read_inside() below still return model
+        # values. Flip it in the same commit that makes them read hardware,
+        # not before — it is what drives `reported.simulated`, and therefore
+        # whether the dashboard warns that the numbers are invented.
+        self.sensors = "SIMULATED"
+        self.outputs = "NONE"
 
         if FAN_GPIO or HEATER_GPIO:
             try:
@@ -121,14 +156,20 @@ class Hardware:
                     # must never get here — see _open().
                     self._pins["heater"] = self._open(
                         "heater", int(HEATER_GPIO), HEATER_TYPE, HEATER_ACTIVE_LOW, 1)
-                self.backend = "REAL"
+                self.outputs = "GPIO"
             except Exception as exc:        # noqa: BLE001 — never block startup on wiring
-                print(f"hardware: falling back to simulation ({exc})")
+                print(f"hardware: no GPIO, outputs disabled ({exc})")
                 self._pins.clear()
 
-        # Simulated chamber state, used only by the SIMULATED backend.
+        # Simulated chamber state. Used whenever `sensors` is SIMULATED, which
+        # is independent of whether pins are driven.
         self._inside_c = AMBIENT_C
         self._ambient_c = AMBIENT_C
+
+    @property
+    def backend(self):
+        """One-line summary for the startup banner and the logs."""
+        return f"{self.sensors} sensors / {self.outputs} outputs"
 
     @staticmethod
     def _open(name, pin, kind, active_low, hz):
@@ -149,12 +190,17 @@ class Hardware:
         if kind == "pwm":
             dev = PWMOutputDevice(pin, active_high=not active_low,
                                   initial_value=0.0, frequency=hz)
-        elif kind == "relay":
+        elif kind in ("relay", "led"):
+            # Electrically the same call. They are separate names because the
+            # type picks the ACTIVE_LOW default, and because "led" in a service
+            # file says at a glance that the pin drives an indicator rather
+            # than something that can cook the contents of a chamber.
             dev = OutputDevice(pin, active_high=not active_low,
                                initial_value=False)
         else:
             raise ValueError(
-                f"{name.upper()}_TYPE={kind!r} is not understood; use 'relay' or 'pwm'")
+                f"{name.upper()}_TYPE={kind!r} is not understood; "
+                "use 'relay', 'led' or 'pwm'")
 
         print(f"hardware: {name} on GPIO{pin} as {kind}, "
               f"active-{'LOW' if active_low else 'HIGH'}"
@@ -179,7 +225,7 @@ class Hardware:
         to respond; the dashboard surfaces that as a dropout on the 3D model
         rather than quietly averaging a dead sensor's last value.
         """
-        jitter = 0.0 if self.backend == "REAL" else (random.random() - 0.5) * 0.05
+        jitter = (random.random() - 0.5) * 0.05 if self.sensors == "SIMULATED" else 0.0
         return [(self._inside_c + jitter, INSIDE_RH, True) for _ in range(SENSOR_COUNT)]
 
     def label(self, index):
@@ -208,7 +254,10 @@ class Hardware:
             # needs to know the board's polarity.
             pin.value = value if hasattr(pin, "frequency") else bool(value >= 0.5)
 
-        if self.backend == "SIMULATED":
+        # Keyed on `sensors`, NOT on whether pins exist. Driving an LED must
+        # not stop the modelled temperature from moving — that combination is
+        # the entire point of the demo rig.
+        if self.sensors == "SIMULATED":
             self._simulate(decision, dt_s)
 
     def _simulate(self, decision, dt_s):
@@ -233,29 +282,33 @@ class Hardware:
         there is no climate room around a demo. Ignored entirely by the REAL
         backend — an operator must never be able to fake a measurement.
         """
-        if self.backend == "SIMULATED" and temp_c is not None:
-            self._ambient_c = float(temp_c)
-        elif self.backend == "SIMULATED":
-            self._ambient_c = AMBIENT_C
+        if self.sensors != "SIMULATED":
+            return
+        self._ambient_c = AMBIENT_C if temp_c is None else float(temp_c)
 
     def state(self):
         """What the outputs really are — this is what gets reported.
 
-        `fanControlled` is the honest bit: with the fan on pin 4/6 it is wired
-        straight to 5V, so it is running at full speed no matter what `fan`
-        says. Reporting the request as though it were the state is how a
-        dashboard ends up lying.
+        `fanControlled` is the honest bit. A fan wired straight to pin 4/6 sits
+        on the 5V rail and runs at full speed no matter what `fan` says, so it
+        is reported as 1.0 and flagged uncontrolled. Once it goes through a
+        relay the command IS the state and the flag flips. Reporting the
+        request as though it were the state is how a dashboard ends up lying.
+
+        `simulated` tracks the readings, not the outputs: on a demo rig the
+        degrees are invented even though the LED is genuinely lit, and it is
+        the degrees the dashboard must warn about.
         """
-        controlled = "fan" in self._pins
+        fan_controlled = "fan" in self._pins
         return {
-            "fanTopSpeed": self._outputs["fan"] if controlled else 1.0,
-            "fanBottomSpeed": self._outputs["fan"] if controlled else 1.0,
+            "fanTopSpeed": self._outputs["fan"] if fan_controlled else 1.0,
+            "fanBottomSpeed": self._outputs["fan"] if fan_controlled else 1.0,
             "shutterTopOpen": self._outputs["fan"],
             "shutterBottomOpen": self._outputs["fan"],
             "heaterIntensity": self._outputs["heater"],
-            "fanControlled": controlled,
+            "fanControlled": fan_controlled,
             "heaterControlled": "heater" in self._pins,
-            "simulated": self.backend == "SIMULATED",
+            "simulated": self.sensors == "SIMULATED",
             "piCpuTemp": cpu_temp() or 0.0,
         }
 

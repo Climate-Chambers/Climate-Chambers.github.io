@@ -25,11 +25,11 @@ after an OS upgrade.
 
 | File | Lines | Job | Touches |
 |---|---|---|---|
-| [`chamber.py`](chamber.py) | 165 | entry point; wires the other three together and runs the control loop | — |
+| [`chamber.py`](chamber.py) | 166 | entry point; wires the other three together and runs the control loop | — |
 | [`control.py`](control.py) | 245 | the control law: hysteresis, minimum on/off times, faults | nothing |
-| [`hardware.py`](hardware.py) | 200 | sensors and actuators — **the file to edit when wiring** | GPIO |
-| [`cloud.py`](cloud.py) | 465 | auth, Firestore REST, the sync thread, on-disk state | network |
-| [`setup.sh`](setup.sh) | 199 | download, prompt, systemd unit, watchdog. Run once, with sudo | — |
+| [`hardware.py`](hardware.py) | 328 | sensors and actuators — **the file to edit when wiring** | GPIO |
+| [`cloud.py`](cloud.py) | 520 | auth, Firestore REST, the sync thread, on-disk state | network |
+| [`setup.sh`](setup.sh) | 230 | download, prompt, systemd unit, watchdog. Run once, with sudo | — |
 
 The split is not cosmetic. `control.py` imports no I/O of any kind and takes
 its clock as an argument, so the entire control law can be exercised on a
@@ -174,6 +174,96 @@ negative tied to the Pi's ground, or the MOSFET never sees a gate voltage.
 The tach wire gives real speed feedback, which is what lets the agent report
 *"the fan was commanded on and is not turning"* — exactly the failure a climate
 chamber has to catch.
+
+### The demo rig — an LED for heat, a fan for cooling
+
+The most useful configuration before any real chamber exists: the degrees are
+**modelled**, but an LED and a fan really switch, so the control decision is
+visible on a bench with no probes and no heater.
+
+```bash
+sudo HEATER_GPIO=17 HEATER_TYPE=led      FAN_GPIO=6 FAN_TYPE=relay      MIN_ON_S=5 MIN_OFF_S=5 RATE_C_PER_S=0.5      bash setup.sh
+```
+
+The agent prints what it understood, and the banner now names both halves
+separately:
+
+```
+hardware: heater on GPIO17 as led, active-HIGH
+hardware: fan on GPIO6 as relay, active-LOW
+chamber: chamber-...   hardware: SIMULATED sensors / GPIO outputs
+```
+
+`SIMULATED sensors / GPIO outputs` is the demo rig. `reported.simulated` stays
+`true` — it tracks the *readings*, not the outputs, because the degrees are
+what the dashboard must warn about even while the LED is genuinely lit.
+
+`MIN_ON_S=5` is there so the demo is watchable. The 30 s default is right for a
+relay driving a real load; for an LED you want it to react while someone is
+looking at it.
+
+#### Pins
+
+| Signal | BCM | Physical pin | Why this one |
+|---|---|---|---|
+| LED (heating) | GPIO17 | **11** | GPIO9–27 default to a **pull-down** at boot, so the pin is LOW and the LED is dark from power-on |
+| Relay IN (cooling) | GPIO6 | **31** | GPIO0–8 default to a **pull-up**, so the pin is HIGH and an active-low relay stays released from power-on |
+
+That asymmetry is the whole reason for the two choices, and it is the boot-gap
+problem solved by picking the right pin instead of adding a resistor. GPIO0/1
+are reserved for HAT EEPROM, 2/3 have fixed I²C pull-ups, 7–11 are SPI and
+14/15 are the serial console — which leaves GPIO5 (pin 29) and GPIO6 (pin 31)
+as the free pull-up pins.
+
+#### LED — yes, it needs a resistor
+
+A GPIO pin is a 3.3 V source rated ~16 mA (50 mA total across the whole
+header). An LED with no resistor is a short across it.
+
+```
+GPIO17 (pin 11) ──/\/\/\──►|── GND (pin 9)
+                   220Ω    LED
+                          long leg = anode, toward the resistor
+                          short leg / flat edge = cathode, to GND
+```
+
+**220 Ω** with a red LED gives (3.3 − 2.0) / 220 ≈ **5.9 mA** — comfortably
+under the limit and plenty bright. 330 Ω works too, slightly dimmer.
+
+**Use a red LED.** Blue, white and most greens have a forward voltage of
+3.0–3.2 V, leaving almost nothing across the resistor: (3.3 − 3.1) / 220 ≈
+0.9 mA, which is barely visible. Red is ~2.0 V and is the only colour that is
+comfortable on a 3.3 V rail. Red also happens to be the right colour for heat.
+
+Pins 11 and 9 are adjacent on the header, so this is two jumpers.
+
+#### Fan through the relay
+
+The fan is on pins 4 (5V) and 6 (GND) today, running permanently. Only the
+positive lead moves — it goes through the relay contacts instead of straight
+to the rail:
+
+```
+  5V  (pin 2)  ──── relay VCC
+  GND (pin 39) ──── relay GND
+  GPIO6 (pin 31) ── relay IN
+
+  5V  (pin 4)  ──── relay COM
+  relay NO     ──── fan +          NO = normally open, so the fan is OFF
+  fan −        ──── GND (pin 6)    until the agent energises the coil
+```
+
+Use **NO**, not NC. With NO the fan is off when the relay is unpowered, which
+is the state the Pi is in from power-on until the agent starts.
+
+A 5 V fan draws 100–250 mA and the relay coil another 70–90 mA, all from the
+Pi's 5 V rail. That is fine on a Pi 4 with the official supply. If you would
+rather not hear the relay click every cycle, a logic-level MOSFET (diagram
+above) is silent and has no contacts to wear — but the relay is what you
+already have.
+
+Verify the relay polarity before trusting it: see the 30-second click test
+below.
 
 ### Relay modules — read this before wiring a heater
 

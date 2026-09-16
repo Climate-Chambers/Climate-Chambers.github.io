@@ -133,6 +133,30 @@ if [ -n "${FAN_GPIO:-}${HEATER_GPIO:-}" ]; then
 fi
 
 # ---- 4. the service ------------------------------------------------------
+# Every tunable the agent understands, carried into the unit file if — and
+# only if — it was set on this command line. Listing them explicitly beats
+# exporting the whole environment: a stray variable from the operator's shell
+# has no business steering a chamber.
+#
+# Keep this list in step with the tunables in pi/README.md. A variable missing
+# from here is the sort of bug that works perfectly when you test by hand and
+# then quietly does nothing once systemd is the one starting the agent.
+PASSTHROUGH="
+  CHAMBER_LOCATION
+  FAN_GPIO FAN_TYPE FAN_ACTIVE_LOW FAN_PWM_HZ
+  HEATER_GPIO HEATER_TYPE HEATER_ACTIVE_LOW
+  SENSOR_COUNT AMBIENT_C RATE_C_PER_S
+  BAND_ON_C BAND_OFF_C MIN_ON_S MIN_OFF_S MAX_INSIDE_C MAX_OFFSET_C
+  CONTROL_INTERVAL_S SYNC_INTERVAL_S
+"
+PASSTHROUGH_LINES=""
+for var in $PASSTHROUGH; do
+    if [ -n "${!var:-}" ]; then
+        PASSTHROUGH_LINES="${PASSTHROUGH_LINES}Environment=$var=${!var}"$'\n'
+        echo "  env    $var=${!var}"
+    fi
+done
+
 cat > /etc/systemd/system/chamber.service <<UNIT
 [Unit]
 Description=Climate chamber agent
@@ -149,9 +173,7 @@ Environment=PYTHONUNBUFFERED=1
 Environment=CHAMBER_STATE_DIR=$STATE_DIR
 Environment=CHAMBER_ID=$CHAMBER_ID
 Environment=CHAMBER_NAME=$CHAMBER_NAME
-${FAN_GPIO:+Environment=FAN_GPIO=$FAN_GPIO}
-${HEATER_GPIO:+Environment=HEATER_GPIO=$HEATER_GPIO}
-${CHAMBER_LOCATION:+Environment=CHAMBER_LOCATION=$CHAMBER_LOCATION}
+$PASSTHROUGH_LINES
 ExecStart=/usr/bin/python3 $TARGET_DIR/chamber.py
 
 # Restart=always, not on-failure: a clean exit is still a chamber with nobody
