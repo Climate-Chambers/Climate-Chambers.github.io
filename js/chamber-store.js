@@ -24,7 +24,7 @@ import {
     updateDoc
 } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
 
-import { auth, db, HEARTBEAT_TIMEOUT_MS } from './firebase-config.js?v=20260916a';
+import { auth, db, HEARTBEAT_TIMEOUT_MS } from './firebase-config.js?v=20260916b';
 
 /**
  * Subscribes the dashboard to one chamber. Returns a teardown function.
@@ -229,14 +229,10 @@ function showMissingChamber(chamberId) {
     document.getElementById('chamber-title').innerText = 'תא לא נמצא';
     const banner = document.getElementById('source-banner');
     const text = document.getElementById('source-banner-text');
-    const btn = document.getElementById('btn-toggle-sim');
     if (!banner) return;
     banner.classList.remove('hidden');
     banner.className = 'banner banner-error';
-    text.innerHTML = `<i class="fa-solid fa-circle-exclamation"></i> לא קיים תא אקלים בשם <code dir="ltr">${escapeHtml(chamberId)}</code>. יש לחזור לרשימת התאים.`;
-    btn.className = 'banner-btn';
-    btn.innerText = 'חזרה לרשימה';
-    btn.onclick = () => location.assign('index.html');
+    text.innerHTML = `<i class="fa-solid fa-circle-exclamation"></i> לא קיים תא אקלים בשם <code dir="ltr">${escapeHtml(chamberId)}</code>. <a href="index.html" class="underline font-bold">חזרה לרשימה</a>.`;
 }
 
 function writeErrorLabel(err) {

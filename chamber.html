@@ -674,7 +674,6 @@
     <!-- Data-source banner: explains where the numbers on screen come from -->
     <div id="source-banner" class="banner hidden">
         <span id="source-banner-text" class="flex items-center gap-2"></span>
-        <button id="btn-toggle-sim" class="banner-btn"></button>
     </div>
 
     <!-- Main Content Grid Area -->
@@ -3812,16 +3811,13 @@
         function renderSourceBanner() {
             const banner = document.getElementById('source-banner');
             const text = document.getElementById('source-banner-text');
-            const btn = document.getElementById('btn-toggle-sim');
-            if (!banner || !text || !btn) return;
+            if (!banner || !text) return;
 
             banner.classList.remove('hidden');
-            btn.className = 'banner-btn';
 
             if (isLive()) {
                 banner.className = 'banner banner-live';
                 text.innerHTML = '<i class="fa-solid fa-satellite-dish"></i> נתונים חיים מבקר ה-Raspberry Pi — כל הקריאות מתקבלות מהחומרה.';
-                btn.innerText = 'מעבר לסימולציה';
             } else {
                 banner.className = 'banner banner-sim';
                 // Be precise about what is and is not persisted: the readings are
@@ -3829,7 +3825,6 @@
                 text.innerHTML = '<i class="fa-solid fa-flask"></i> '
                     + '<strong>קריאות החיישנים בסימולציה מקומית</strong> ואינן נשמרות — הבקר אינו מקושר. '
                     + 'הגדרות המצב והיעד <strong>כן נשמרות ב-Firestore</strong> ויועברו לבקר כשיתחבר.';
-                btn.innerText = state.piOnline ? 'חזרה לנתונים חיים' : 'חזרה לנתונים חיים (הבקר מנותק)';
             }
         }
 
@@ -4050,9 +4045,9 @@
          the classic script above has defined window.ChamberUI.
          ====================================================================== -->
     <script type="module">
-        import { requireApprovedUser, signOutAndRedirect, renderBlockingScreen } from './js/auth-guard.js?v=20260916a';
-        import { attachChamber, listChamberTabs } from './js/chamber-store.js?v=20260916a';
-        import { createSimulator } from './js/simulator.js?v=20260916a';
+        import { requireApprovedUser, signOutAndRedirect, renderBlockingScreen } from './js/auth-guard.js?v=20260916b';
+        import { attachChamber, listChamberTabs } from './js/chamber-store.js?v=20260916b';
+        import { createSimulator } from './js/simulator.js?v=20260916b';
 
         document.getElementById('btn-signout').onclick = () => signOutAndRedirect();
 
@@ -4076,18 +4071,6 @@
         // Local physics model, used when no controller is reachable.
         const simulator = createSimulator(UI);
         UI.setSimulator(simulator);
-
-        // Manual override between live data and the local simulator.
-        document.getElementById('btn-toggle-sim').onclick = () => {
-            if (UI.isLive()) {
-                UI.setSourceMode('sim');
-                simulator.start();
-            } else {
-                simulator.stop();
-                UI.setSourceMode('live');
-                UI.updateCalculations();
-            }
-        };
 
         const detach = await attachChamber(chamberId, UI, simulator);
         window.addEventListener('pagehide', detach);
