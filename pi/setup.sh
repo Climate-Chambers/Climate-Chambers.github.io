@@ -203,11 +203,26 @@ fi
 # gpiozero only matters once a pin is actually being driven. Pi OS Desktop
 # ships it, Lite does not, and an install with no wiring yet must not drag in
 # apt for nothing.
+#
+# lgpio is checked for separately, and that is not belt-and-braces. On a Pi 5
+# the header is driven by the RP1 chip, which only the lgpio backend can talk
+# to — and `import gpiozero` SUCCEEDS without it. gpiozero resolves its pin
+# backend lazily, so the failure only appears when the agent opens its first
+# pin, at which point hardware.py fails safe and disables every output. Testing
+# the import alone would pass, install nothing, and leave a Pi 5 with a chamber
+# that silently ignores the dashboard. On a Pi 4 lgpio is gpiozero's preferred
+# backend too, so installing it there is correct rather than merely harmless.
 if [ -n "${FAN_GPIO:-}${HEATER_GPIO:-}" ]; then
-    if ! sudo -u "$RUN_USER" python3 -c "import gpiozero" 2>/dev/null; then
-        echo "  gpio   installing python3-gpiozero..."
-        apt-get update -qq && apt-get install -y -qq python3-gpiozero
+    if ! sudo -u "$RUN_USER" python3 -c "import gpiozero, lgpio" 2>/dev/null; then
+        echo "  gpio   installing python3-gpiozero and python3-lgpio..."
+        apt-get update -qq && apt-get install -y -qq python3-gpiozero python3-lgpio
     fi
+fi
+
+# Say which board this is. Everything above works on a Pi 4 and a Pi 5 alike,
+# but when an output misbehaves the model is the first thing worth knowing.
+if [ -r /proc/device-tree/model ]; then
+    echo "  board  $(tr -d '\0' < /proc/device-tree/model)"
 fi
 
 # ---- 4. the service ------------------------------------------------------

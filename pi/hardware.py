@@ -157,6 +157,12 @@ class Hardware:
                     self._pins["heater"] = self._open(
                         "heater", int(HEATER_GPIO), HEATER_TYPE, HEATER_ACTIVE_LOW, 1)
                 self.outputs = "GPIO"
+                # Which backend gpiozero settled on. On a Pi 5 anything but
+                # lgpio cannot reach the header at all (it is behind the RP1
+                # chip), so this one line answers "why is nothing switching"
+                # before anyone reaches for a multimeter.
+                from gpiozero import Device
+                print(f"hardware: pin backend {type(Device.pin_factory).__name__}")
             except Exception as exc:        # noqa: BLE001 — never block startup on wiring
                 print(f"hardware: no GPIO, outputs disabled ({exc})")
                 self._pins.clear()

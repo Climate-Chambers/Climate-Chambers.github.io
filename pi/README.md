@@ -26,11 +26,11 @@ after an OS upgrade.
 
 | File | Lines | Job | Touches |
 |---|---|---|---|
-| [`chamber.py`](chamber.py) | 166 | entry point; wires the other three together and runs the control loop | — |
+| [`chamber.py`](chamber.py) | 176 | entry point; wires the other three together and runs the control loop | — |
 | [`control.py`](control.py) | 245 | the control law: hysteresis, minimum on/off times, faults | nothing |
-| [`hardware.py`](hardware.py) | 328 | sensors and actuators — **the file to edit when wiring** | GPIO |
-| [`cloud.py`](cloud.py) | 520 | auth, Firestore REST, the sync thread, on-disk state | network |
-| [`setup.sh`](setup.sh) | 308 | download, prompt, systemd unit, watchdog. Run once, with sudo | — |
+| [`hardware.py`](hardware.py) | 334 | sensors and actuators — **the file to edit when wiring** | GPIO |
+| [`cloud.py`](cloud.py) | 575 | auth, Firestore REST, the sync thread, on-disk state | network |
+| [`setup.sh`](setup.sh) | 323 | download, prompt, systemd unit, watchdog. Run once, with sudo | — |
 
 The split is not cosmetic. `control.py` imports no I/O of any kind and takes
 its clock as an argument, so the entire control law can be exercised on a
@@ -407,6 +407,62 @@ wired in series with it. `MAX_INSIDE_C` is a backstop, not the protection.
 * **Coil current.** ~70–90 mA per relay. That is the module's own transistor's
   job, never the GPIO pin's — which is why you use a module and not a bare relay.
 * **Do not PWM a mains fan**, whatever is switching it.
+
+### Raspberry Pi 5
+
+**The wiring is identical.** The 40-pin header has the same pinout, so every
+pin number on this page — 11, 13, 2, 4, 6, 9, 14 — means the same thing on a
+Pi 5. Nothing on the breadboard or the relay changes.
+
+What changes is underneath. On a Pi 5 the header is driven by the **RP1** I/O
+chip rather than the SoC, with three consequences:
+
+* **`RPi.GPIO` does not work at all.** This agent never used it; it uses
+  gpiozero, which does.
+* **gpiozero needs the `lgpio` backend**, and `import gpiozero` succeeds without
+  it — the failure only appears when the first pin is opened, at which point
+  `hardware.py` fails safe and disables every output. `setup.sh` therefore
+  checks for `lgpio` explicitly and installs `python3-lgpio` if it is missing.
+  The agent logs the backend it got:
+  ```
+  hardware: pin backend LGPIOFactory
+  ```
+  Anything else on a Pi 5 means the outputs cannot work.
+* **`raspi-gpio` is gone; use `pinctrl`.** It is also the way to check the
+  power-on default that the pin choices above depend on, rather than trusting
+  that the Pi 5 kept the Pi 4's convention:
+  ```bash
+  pinctrl get 17,27
+  ```
+  Before the agent starts you want `pd | lo` on both — pulled down, reading low,
+  which keeps the LED dark and an active-HIGH relay released.
+
+Two practical differences:
+
+* **Power supply.** A Pi 5 wants the 27 W (5 V / 5 A) supply. On a 3 A supply
+  it still runs but caps USB current and warns at boot. The relay coil and fan
+  draw ~190 mA from the 5 V pins, which either supply handles.
+* **The Pi 5 has its own fan connector** (4-pin JST, beside the USB ports) for
+  cooling the board, controlled by the firmware. That is unrelated to the
+  chamber fan, which stays on the relay exactly as above.
+
+#### Moving an existing chamber to a Pi 5
+
+The chamber's identity lives in `~/.chamber-agent/identity.json`, not in the
+hardware. Three ways to keep `yehuda-room` and its history:
+
+1. **Move the SD card.** Simplest, if the OS is Bookworm or newer
+   (`cat /etc/os-release`) — those images boot on both boards. Run
+   `sudo apt full-upgrade` first, then re-run `setup.sh` on the Pi 5 so
+   `lgpio` is installed.
+2. **Copy the identity** to a fresh Pi 5 before running `setup.sh`:
+   ```bash
+   scp -r ~/.chamber-agent  <user>@<pi5>:~/
+   ```
+3. **Fresh install with `CHAMBER_ID=yehuda-room`** — but switch the Pi 4 off
+   first and wait **15 minutes**. The rules only let a new device take over a
+   chamber whose previous owner has been silent that long; before then the
+   claim is refused and `register()` walks on to `yehuda-room-2`.
 
 ## The chamber id
 
